@@ -21,6 +21,7 @@ uygulanmadı; session yalnızca kimlik doğrular, üyelik yetkisi vermez.
 - [Foundation kararları](docs/decisions/0002-platform-foundation.md)
 - [Docker/CI doğrulaması](docs/decisions/0003-docker-ci-verification.md)
 - [Users/sessions auth](docs/decisions/0004-users-sessions-auth.md)
+- [Reusable SaaS Starter kararı](docs/decisions/0005-reusable-saas-starter.md)
 
 ## Mevcut yapı
 

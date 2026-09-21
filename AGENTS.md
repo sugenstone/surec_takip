@@ -70,6 +70,7 @@ Current high-level order:
 01 Repository + CI
 02 Multi-tenancy
 03 Auth + RBAC
+-- MILESTONE: Reusable SaaS Starter Extraction (see §43) --
 04 Projects + Sections + Cards
 05 Dynamic Properties
 06 Processes + Steps
@@ -97,7 +98,9 @@ Current high-level order:
 ```
 
 Do not jump to attractive later features while foundational acceptance
-criteria are failing.
+criteria are failing. Project-specific domain development (04 and later)
+must not begin until the reusable starter extraction gate has been
+evaluated (§43).
 
 # 5. Task Execution Protocol
 
@@ -619,12 +622,15 @@ If repository is new, begin exactly here:
 11. Write cross-tenant security tests.
 12. Do not continue until they pass.
 13. Implement roles/permissions.
-14. Build minimal app shell.
-15. Implement projects.
-16. Implement recursive sections + cycle prevention.
-17. Implement cards + soft delete/restore.
-18. Verify Phase 1–4 acceptance criteria.
-19. Only then begin Dynamic Properties.
+14. Implement user invitations.
+15. Build minimal app shell.
+16. Evaluate the reusable starter extraction gate (§43) before any
+    project-specific domain work.
+17. Implement projects.
+18. Implement recursive sections + cycle prevention.
+19. Implement cards + soft delete/restore.
+20. Verify Phase 1–4 acceptance criteria.
+21. Only then begin Dynamic Properties.
 ```
 
 # 37. Final Agent Instruction
@@ -878,3 +884,54 @@ The hook runs `npm run check:prepush`: frontend format check, lint,
 typecheck, unit tests, Rust fmt, clippy, tests and OpenAPI contract
 drift. Heavy Docker builds, E2E and Docker smoke stay in CI and are run
 in the full local verification flow instead.
+
+---
+
+# 43. Reusable SaaS Starter Extraction (Milestone)
+
+The generic SaaS/tenancy/security foundation built in this repository is
+planned to become a reusable **"Sugenstone SaaS Starter"** so future
+products do not rebuild it from scratch.
+
+Milestone position (binding):
+
+```text
+Generic SaaS/Security Foundation
+        ↓
+Reusable SaaS Starter Extraction
+        ↓
+Project-Specific Domain Development
+```
+
+Protection rule:
+
+> Project-specific domain development must not begin until the reusable
+> starter extraction gate has been evaluated after completion of the
+> generic multi-tenant/security foundation.
+
+This rule does not block the generic foundation itself. Users, sessions,
+authentication, organizations, organization memberships, workspaces,
+workspace memberships, invitations, roles, permissions, RBAC, tenant
+context, tenant isolation and cross-tenant security tests are all part of
+the generic foundation and proceed in their documented order.
+
+Canonical details live in
+[docs/decisions/0005-reusable-saas-starter.md](docs/decisions/0005-reusable-saas-starter.md):
+starter scope (included and excluded components), extraction gate
+conditions, the extraction procedure, future template usage and the
+semantic-versioning intent. The milestone's working instructions are in
+`docs/AI_CODING_AGENT_MASTER_PLAN.md` (Phase 3.5).
+
+Rules:
+
+- Do not perform the extraction now. It is a separate milestone that runs
+  only after the generic foundation is complete, its tests pass and
+  hosted CI is green.
+- Extraction must not break this repository or its development history.
+  This product keeps developing here; the starter becomes an independent
+  starting point for new projects. Changes made in the starter later are
+  NOT automatically propagated to products derived from it.
+- Keep generic infrastructure free of product-specific domain concepts
+  (see the ADR's extraction boundary) so the future extraction stays safe.
+- Semantic versioning is planned for the starter; do not implement
+  versioning now.

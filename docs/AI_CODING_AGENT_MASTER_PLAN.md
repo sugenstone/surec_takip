@@ -486,6 +486,98 @@ endpoints.
 
 ------------------------------------------------------------------------
 
+# PHASE 3.5 --- Reusable SaaS Starter Extraction (Milestone)
+
+This milestone makes the generic SaaS/tenancy/security foundation reusable
+as the **"Sugenstone SaaS Starter"** so future products do not rebuild it
+from scratch. Decision record:
+`docs/decisions/0005-reusable-saas-starter.md`.
+
+Position (binding):
+
+``` text
+Generic SaaS/Security Foundation
+        ↓
+Reusable SaaS Starter Extraction
+        ↓
+Project-Specific Domain Development
+```
+
+Protection rule:
+
+> Project-specific domain development must not begin until the reusable
+> starter extraction gate has been evaluated after completion of the
+> generic multi-tenant/security foundation.
+
+The generic foundation (users/sessions, authentication, organizations,
+memberships, workspaces, workspace memberships, invitations, roles,
+permissions, RBAC, tenant context, tenant isolation, cross-tenant
+security tests) is NOT blocked by this rule — it is the rule's
+precondition.
+
+## 3.5.1 Gate conditions
+
+Extraction may begin only when all of the following hold:
+
+``` text
+users + secure sessions implemented and tested
+organizations + organization memberships
+workspaces + workspace memberships
+invitations
+roles + permissions + RBAC
+tenant context middleware
+tenant isolation
+cross-tenant security tests green
+hosted CI green on the foundation commit
+```
+
+## 3.5.2 Extraction procedure (agent obligations at extraction time)
+
+1. Review the repository for domain independence.
+2. Identify any surec_takip-specific names, assumptions or dependencies
+   that leaked into the generic foundation.
+3. Separate generic code from product domain code.
+4. Make project name, product name, branding, application title and
+   similar identity values easily configurable.
+5. Prepare the starter's own `README.md`.
+6. Prepare/adapt the starter's own `AGENTS.md`.
+7. Create an example `PROJECT_BRIEF.md` template for new projects
+   (Product, Purpose, Primary Users, Main Domain Entities, Initial
+   Language, Additional Languages, Branding, Special Requirements).
+8. Define the new-project startup procedure:
+
+   ``` text
+   Sugenstone SaaS Starter
+   → create new repository from template
+   → configure project identity/environment
+   → complete PROJECT_BRIEF.md
+   → coding agent reads AGENTS.md + PROJECT_BRIEF.md
+   → agent plans project-specific domain
+   → domain implementation begins
+   ```
+
+9. Run all generic tests in the starter.
+10. Verify Docker clean-start.
+11. Verify database migrations.
+12. Run authentication and tenant-isolation security tests.
+13. Verify GitHub Actions is green on the starter repository.
+14. Verify the starter repository contains no secrets, production
+    credentials, customer data, project-specific data, or
+    surec_takip-specific assumptions.
+15. Verify readiness for use as a GitHub Template Repository.
+
+## 3.5.3 Boundaries and consequences
+
+- The starter stays domain-independent; the excluded-domain list lives in
+  the decision record and must be respected by generic phases.
+- Extraction must not break this repository or its history; the product
+  keeps developing here independently.
+- Starter changes are not automatically propagated to derived products.
+- The starter may adopt semantic versioning (v1.0.0, v1.1.0, ...); no
+  versioning implementation happens now.
+
+------------------------------------------------------------------------
+
 # PHASE 4 --- Core Work Model
 
 ## 4.1 Projects
@@ -2312,6 +2404,7 @@ The coding agent must follow this order:
 01 Repository + CI
 02 Multi-tenancy
 03 Auth + RBAC
+-- MILESTONE: Reusable SaaS Starter Extraction (Phase 3.5) --
 04 Projects + Sections + Cards
 05 Dynamic Properties
 06 Processes + Steps
