@@ -1,6 +1,7 @@
 <script lang="ts">
   import '../app.css';
   import { goto, invalidateAll } from '$app/navigation';
+  import { resolve } from '$app/paths';
   import { translate } from '$lib/i18n';
   import { logoutRequest } from '$lib/api/client';
   import type { LayoutProps } from './$types';
@@ -19,7 +20,7 @@
     } finally {
       signingOut = false;
       await invalidateAll();
-      await goto('/login');
+      await goto(resolve('/login'));
     }
   }
 </script>

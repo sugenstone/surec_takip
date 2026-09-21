@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto, invalidateAll } from '$app/navigation';
+  import { resolve } from '$app/paths';
   import { loginRequest } from '$lib/api/client';
   import { loginErrorMessageKey } from '$lib/api/errors';
   import { translate, type TranslationKey } from '$lib/i18n';
@@ -19,7 +20,7 @@
     try {
       await loginRequest(email.trim(), password);
       await invalidateAll();
-      await goto('/');
+      await goto(resolve('/'));
     } catch (error) {
       const key: TranslationKey = loginErrorMessageKey(error);
       errorMessage = translate(data.locale, key);

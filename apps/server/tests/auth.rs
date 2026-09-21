@@ -193,10 +193,11 @@ async fn session_expiry_follows_the_configured_ttl(
     create_user(&pool, "ttl@example.test", "password", "Ttl").await;
     let response = login(&pool, "ttl@example.test", "password").await;
     assert_eq!(response.status(), StatusCode::OK);
-    let seconds: f64 =
-        sqlx::query_scalar("SELECT extract(epoch from (expires_at - created_at))::float8 FROM sessions")
-            .fetch_one(&pool)
-            .await?;
+    let seconds: f64 = sqlx::query_scalar(
+        "SELECT extract(epoch from (expires_at - created_at))::float8 FROM sessions",
+    )
+    .fetch_one(&pool)
+    .await?;
     assert!(
         (seconds - 3600.0).abs() < 1.0,
         "ttl must match config (3600s)"
