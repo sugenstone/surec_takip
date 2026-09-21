@@ -209,6 +209,35 @@ ve gerçek auth akışını (login, yanlış parola, HttpOnly cookie, logout son
 oturum geçersizliği) kapsar. Ürün kritik E2E akışı (proje/süreç/TV) henüz
 mevcut değildir.
 
+### Pre-push kapısı
+
+`git push` öncesi hızlı yerel kalite kapısı (AGENTS.md §42). Her clone için
+bir kez aktive edilir:
+
+```powershell
+npm run setup:hooks
+```
+
+Aktive edildikten sonra her push, `.githooks/pre-push` üzerinden
+`npm run check:prepush` çalıştırır ve herhangi bir adım başarısızsa push'u
+durdurur. Sıra (en ucuz/hızlıdan pahalıya):
+
+```text
+cargo fmt --all --check
+npm run format:check
+npm run lint
+npm run typecheck
+npm test                       (vitest unit)
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo test --workspace --locked
+npm run contracts:check        (OpenAPI/TypeScript drift)
+```
+
+Kapı bilinçli olarak ağır işleri içermez; PostgreSQL entegrasyon testleri
+(`test:db`), Docker image build/smoke (`test:docker`) ve tam stack E2E
+(`test:e2e`) CI'da ve tam yerel doğrulama akışında çalışır. Yeni dependency
+eklenmedi; hook mevcut npm script'lerinden oluşur.
+
 Kod formatlamak ve sözleşme yenilemek için:
 
 ```powershell

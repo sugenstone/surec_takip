@@ -1,0 +1,5 @@
+#!/bin/sh
+# Fast local quality gate before push (AGENTS.md §42).
+# Activate once per clone: npm run setup:hooks
+# Heavy Docker builds, E2E and Docker smoke intentionally stay in CI.
+npm run check:prepush

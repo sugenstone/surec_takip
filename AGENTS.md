@@ -811,3 +811,70 @@ Does dark mode remain coherent?
 ```
 
 A user-facing feature that is functionally complete but visually inconsistent with the design system is **not complete**.
+
+---
+
+# 42. Mandatory Incremental Verification
+
+Errors must not accumulate until the end of a task. This section is
+binding for every change.
+
+Working rule:
+
+```text
+Implement → run the cheapest relevant verification → fix failures → continue
+```
+
+While a type check, compiler, lint, migration check, or relevant test is
+failing, do not start the next feature unit. Do not batch verification to
+the end of a large task.
+
+## TypeScript / Svelte
+
+1. After changing a logical unit, run the relevant typecheck before
+   continuing to the next unit.
+2. A symbol used at runtime (`instanceof`, `new`, static access, function
+   or class values) must never be imported with `import type`. Type-only
+   imports are for types only.
+3. Never silence errors with `any`, `@ts-ignore`, `@ts-expect-error`,
+   ESLint disable comments, or by weakening `tsconfig` strictness. Fix the
+   cause instead.
+
+## Rust
+
+At the relevant stages of a change, run:
+
+```text
+cargo fmt --all --check
+relevant cargo tests
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+```
+
+A change is not ready to build upon while any of these fails.
+
+## Database / migrations
+
+A migration or query change is not done until the relevant PostgreSQL
+integration tests pass against a real database. Do not move to the next
+layer before they run green. Integration tests are never silently
+skipped.
+
+## Pipelines must not mask failures
+
+When piping command output (for example into `tail` or `grep`), the
+pipeline's exit status is the last command's status. Verify every gate by
+its real exit code. Reporting success from piped output alone is a
+verification failure, not a pass.
+
+## Pre-push quality gate
+
+Before pushing, the fast local gate must pass:
+
+```text
+npm run setup:hooks   # once per clone: activates .githooks/pre-push
+```
+
+The hook runs `npm run check:prepush`: frontend format check, lint,
+typecheck, unit tests, Rust fmt, clippy, tests and OpenAPI contract
+drift. Heavy Docker builds, E2E and Docker smoke stay in CI and are run
+in the full local verification flow instead.
