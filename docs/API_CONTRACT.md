@@ -1,0 +1,1204 @@
+# API_CONTRACT.md
+
+## Multi-Tenant Workflow & Operations Platform
+
+> Companion to `AI_CODING_AGENT_MASTER_PLAN.md` and
+> `DATABASE_SCHEMA.md`. This document defines API conventions and the
+> first implementation contract between SvelteKit clients and the
+> Rust/Axum backend.
+
+# 1. API principles
+
+-   REST for request/response business operations.
+-   WebSocket for realtime server events.
+-   OpenAPI is the canonical machine-readable HTTP contract.
+-   API version prefix: `/api/v1`.
+-   JSON request/response bodies unless uploading/downloading files.
+-   Server is authoritative.
+-   Every tenant-owned endpoint enforces authenticated membership and
+    permission checks.
+-   Never accept `tenant_id` as trusted authorization input.
+-   Prefer command endpoints for meaningful state transitions instead of
+    generic PATCH operations that bypass domain rules.
+-   All timestamps are ISO-8601 UTC.
+-   All IDs are opaque strings to clients.
+-   Use idempotency keys for retry-sensitive commands.
+-   Use optimistic concurrency/revision on collaborative editable
+    entities.
+-   Do not expose internal database errors.
+
+# 2. Standard response conventions
+
+Successful resource:
+
+``` json
+{
+  "data": {
+    "id": "..."
+  }
+}
+```
+
+Collection:
+
+``` json
+{
+  "data": [],
+  "meta": {
+    "next_cursor": null
+  }
+}
+```
+
+Error:
+
+``` json
+{
+  "error": {
+    "code": "DEPENDENCY_BLOCKED",
+    "message": "This task cannot start yet.",
+    "details": {},
+    "request_id": "..."
+  }
+}
+```
+
+Validation error:
+
+``` json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Some fields are invalid.",
+    "details": {
+      "fields": {
+        "title": ["Required"]
+      }
+    },
+    "request_id": "..."
+  }
+}
+```
+
+# 3. HTTP status conventions
+
+``` text
+200 OK                  read/update/command success
+201 Created             resource created
+202 Accepted            asynchronous operation accepted
+204 No Content          successful no-body operation
+400 Bad Request         malformed request
+401 Unauthorized        not authenticated
+403 Forbidden           authenticated but not permitted
+404 Not Found           absent OR intentionally hidden cross-tenant resource
+409 Conflict            revision/state/idempotency conflict
+422 Unprocessable       domain/validation rule failure
+429 Too Many Requests   rate limited
+500 Internal Error      unexpected server failure
+```
+
+Do not reveal whether a foreign-tenant UUID exists. Return the same safe
+not-found behavior.
+
+# 4. Authentication
+
+## Foundation operational probes
+
+Before authentication/domain endpoints are implemented, the server exposes only:
+
+```text
+GET /api/v1/health   200 while the HTTP process is live
+GET /api/v1/ready    200 when PostgreSQL SELECT 1 succeeds; otherwise 503
+```
+
+These probes intentionally require no tenant context or permission and return no
+tenant data, credentials, version details or database errors. Success uses
+`{"data":{"status":"ok"}}` / `{"data":{"status":"ready"}}`.
+Readiness checks connectivity, not schema version; deployment must run migration
+apply/verify separately before admitting application traffic.
+
+Every response carries a server-generated `x-request-id` and `Cache-Control:
+no-store`. Structured errors include the same ID. Unknown routes return
+`RESOURCE_NOT_FOUND` (404), unsupported methods `METHOD_NOT_ALLOWED` (405),
+database readiness failure `SERVICE_NOT_READY` (503). Probe callers can retry
+after recovery; these read-only calls require no idempotency key.
+
+The generated foundation contract is `packages/contracts/openapi.json` and its
+TypeScript schema is `packages/contracts/src/schema.d.ts`; drift is checked
+against Rust definitions. Future endpoints below remain unimplemented until
+their phase and must never return fabricated success.
+
+Initial contract may use secure HTTP-only cookie sessions.
+
+``` text
+POST /api/v1/auth/login
+POST /api/v1/auth/logout
+GET  /api/v1/auth/me
+POST /api/v1/auth/password/forgot
+POST /api/v1/auth/password/reset
+POST /api/v1/auth/email/verify
+```
+
+Example `GET /auth/me`:
+
+``` json
+{
+  "data": {
+    "user": {
+      "id": "...",
+      "display_name": "..."
+    },
+    "organizations": [
+      {
+        "id": "...",
+        "name": "...",
+        "role_summary": ["..."]
+      }
+    ]
+  }
+}
+```
+
+# 5. Tenant/workspace context
+
+Preferred URL context:
+
+``` text
+/api/v1/organizations/{organization_id}/...
+/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/...
+```
+
+The URL selects context; authentication/membership authorizes it.
+
+Endpoints:
+
+``` text
+GET  /organizations
+POST /organizations
+GET  /organizations/{organization_id}
+PATCH /organizations/{organization_id}
+
+GET  /organizations/{organization_id}/workspaces
+POST /organizations/{organization_id}/workspaces
+GET  /organizations/{organization_id}/workspaces/{workspace_id}
+PATCH /organizations/{organization_id}/workspaces/{workspace_id}
+```
+
+# 6. Invitations and memberships
+
+``` text
+GET    /organizations/{org}/members
+POST   /organizations/{org}/invitations
+DELETE /organizations/{org}/invitations/{invitation_id}
+POST   /invitations/{token}/accept
+
+PATCH  /organizations/{org}/members/{user_id}
+DELETE /organizations/{org}/members/{user_id}
+```
+
+Never return invitation secrets after creation.
+
+# 7. Teams
+
+``` text
+GET    /organizations/{org}/workspaces/{ws}/teams
+POST   /organizations/{org}/workspaces/{ws}/teams
+GET    /organizations/{org}/workspaces/{ws}/teams/{team_id}
+PATCH  /organizations/{org}/workspaces/{ws}/teams/{team_id}
+DELETE /organizations/{org}/workspaces/{ws}/teams/{team_id}
+
+POST   /.../teams/{team_id}/members
+DELETE /.../teams/{team_id}/members/{user_id}
+```
+
+# 8. Roles and permissions
+
+``` text
+GET  /organizations/{org}/permissions
+GET  /organizations/{org}/roles
+POST /organizations/{org}/roles
+GET  /organizations/{org}/roles/{role_id}
+PATCH /organizations/{org}/roles/{role_id}
+DELETE /organizations/{org}/roles/{role_id}
+
+PUT /organizations/{org}/members/{user_id}/roles
+```
+
+Role mutation payloads explicitly contain permission keys/scopes.
+
+# 9. Projects
+
+``` text
+GET    /organizations/{org}/workspaces/{ws}/projects
+POST   /organizations/{org}/workspaces/{ws}/projects
+GET    /organizations/{org}/workspaces/{ws}/projects/{project_id}
+PATCH  /organizations/{org}/workspaces/{ws}/projects/{project_id}
+DELETE /organizations/{org}/workspaces/{ws}/projects/{project_id}
+POST   /organizations/{org}/workspaces/{ws}/projects/{project_id}/restore
+```
+
+List filters may include:
+
+``` text
+status
+priority
+due_before
+due_after
+search
+cursor
+limit
+sort
+```
+
+Collaborative mutations include `expected_revision`; resource responses expose
+`revision`. Use this body convention consistently, including move commands.
+
+# 10. Sections
+
+``` text
+GET    /.../projects/{project_id}/sections
+POST   /.../projects/{project_id}/sections
+GET    /.../sections/{section_id}
+PATCH  /.../sections/{section_id}
+DELETE /.../sections/{section_id}
+POST   /.../sections/{section_id}/restore
+POST   /.../sections/{section_id}/move
+POST   /.../sections/{section_id}/duplicate
+POST   /.../projects/{project_id}/sections/bulk-create
+```
+
+Move command:
+
+``` json
+{
+  "new_parent_id": "...",
+  "position": 3,
+  "expected_revision": 7
+}
+```
+
+Backend must reject cycles.
+
+# 11. Cards
+
+``` text
+GET    /.../projects/{project_id}/cards
+POST   /.../projects/{project_id}/cards
+GET    /.../cards/{card_id}
+PATCH  /.../cards/{card_id}
+DELETE /.../cards/{card_id}
+POST   /.../cards/{card_id}/restore
+POST   /.../cards/{card_id}/move
+POST   /.../cards/{card_id}/duplicate
+```
+
+Card detail should be capable of returning/embedding selected related
+data efficiently, but avoid a giant unbounded response. Prefer explicit
+query includes:
+
+``` text
+?include=properties,process_summary,assignees
+```
+
+# 12. Dynamic properties
+
+``` text
+GET    /.../property-definitions
+POST   /.../property-definitions
+PATCH  /.../property-definitions/{property_id}
+DELETE /.../property-definitions/{property_id}
+
+GET /.../cards/{card_id}/properties
+PUT /.../cards/{card_id}/properties/{property_id}
+```
+
+Server validates value against definition type/settings.
+
+# 13. Processes
+
+``` text
+GET    /.../cards/{card_id}/processes
+POST   /.../cards/{card_id}/processes
+GET    /.../processes/{process_id}
+PATCH  /.../processes/{process_id}
+DELETE /.../processes/{process_id}
+POST   /.../processes/{process_id}/restore
+POST   /.../processes/{process_id}/reorder
+```
+
+# 14. Process steps
+
+``` text
+GET    /.../processes/{process_id}/steps
+POST   /.../processes/{process_id}/steps
+GET    /.../process-steps/{step_id}
+PATCH  /.../process-steps/{step_id}
+DELETE /.../process-steps/{step_id}
+POST   /.../process-steps/{step_id}/restore
+POST   /.../processes/{process_id}/steps/reorder
+```
+
+Normal PATCH must not be able to arbitrarily set runtime state to
+`completed`. Use command endpoints below.
+
+# 15. Assignments
+
+``` text
+GET  /.../process-steps/{step_id}/assignments
+POST /.../process-steps/{step_id}/assignments
+POST /.../process-steps/{step_id}/reassign
+```
+
+Example:
+
+``` json
+{
+  "assignee_type": "user",
+  "assignee_id": "...",
+  "reason": null
+}
+```
+
+Assignment changes publish realtime events and may create notifications.
+
+# 16. Dependencies
+
+``` text
+GET    /.../processes/{process_id}/dependencies
+POST   /.../processes/{process_id}/dependencies
+DELETE /.../process-dependencies/{dependency_id}
+
+GET    /.../process-steps/{step_id}/dependencies
+POST   /.../process-steps/{step_id}/dependencies
+DELETE /.../process-step-dependencies/{dependency_id}
+
+POST /.../process-steps/{step_id}/dependency-override
+```
+
+Cycle validation occurs before commit.
+
+Blocked response example:
+
+``` json
+{
+  "error": {
+    "code": "DEPENDENCY_BLOCKED",
+    "message": "This task cannot start yet.",
+    "details": {
+      "waiting_for": [
+        {
+          "id": "...",
+          "name": "Previous Step",
+          "required_state": "completed"
+        }
+      ]
+    }
+  }
+}
+```
+
+# 17. Task runtime commands
+
+These are the most important employee endpoints.
+
+``` text
+POST /.../process-steps/{step_id}/start
+POST /.../process-steps/{step_id}/pause
+POST /.../process-steps/{step_id}/resume
+POST /.../process-steps/{step_id}/complete
+POST /.../process-steps/{step_id}/reopen
+```
+
+Use `Idempotency-Key` for these commands.
+
+### Start
+
+Request:
+
+``` json
+{
+  "expected_revision": 4,
+  "switch_from_active_task": false
+}
+```
+
+If employee already has an active task:
+
+``` json
+{
+  "error": {
+    "code": "ACTIVE_TASK_EXISTS",
+    "message": "You already have an active task.",
+    "details": {
+      "active_step_id": "...",
+      "can_switch": true
+    }
+  }
+}
+```
+
+If user confirms switching:
+
+``` json
+{
+  "expected_revision": 4,
+  "switch_from_active_task": true
+}
+```
+
+Server transaction: 1. pause current session, 2. start new session, 3.
+update states, 4. write audit records, 5. write outbox events, 6.
+commit.
+
+### Pause
+
+``` json
+{
+  "stop_reason_id": "...",
+  "note": null,
+  "expected_revision": 5
+}
+```
+
+### Resume
+
+``` json
+{
+  "expected_revision": 6
+}
+```
+
+### Complete
+
+``` json
+{
+  "expected_revision": 7,
+  "completion_data": {}
+}
+```
+
+Server validates checklist/forms/required fields/approval rules.
+
+### Reopen
+
+Requires permission and optional/required reason depending on policy.
+
+``` json
+{
+  "reason": "Completed by mistake",
+  "expected_revision": 8
+}
+```
+
+# 18. My Tasks
+
+Employee-focused endpoints should be optimized for simple UI.
+
+``` text
+GET /organizations/{org}/workspaces/{ws}/me/tasks
+GET /organizations/{org}/workspaces/{ws}/me/active-task
+GET /organizations/{org}/workspaces/{ws}/me/completed-today
+```
+
+Example task:
+
+``` json
+{
+  "id": "...",
+  "status": "ready",
+  "title": "Process Step Name",
+  "context": {
+    "project": {"id": "...", "name": "..."},
+    "section_path": ["...", "..."],
+    "card": {"id": "...", "code": "CARD-01842", "title": "..."},
+    "process": {"id": "...", "name": "..."}
+  },
+  "priority": "normal",
+  "due_at": null,
+  "blocked_reason": null,
+  "timer": {
+    "active": false,
+    "accumulated_seconds": 0,
+    "started_at": null
+  }
+}
+```
+
+# 19. Live operations / TV
+
+``` text
+GET /organizations/{org}/workspaces/{ws}/live-operations
+```
+
+Returns current active/optionally paused work.
+
+TV does not poll every second. It receives authoritative start state and
+calculates timer locally.
+
+TV-specific display configuration:
+
+``` text
+GET /organizations/{org}/workspaces/{ws}/tv-settings
+PATCH /organizations/{org}/workspaces/{ws}/tv-settings
+```
+
+# 20. WebSocket contract
+
+Suggested endpoint:
+
+``` text
+GET /api/v1/realtime
+```
+
+Authentication uses the existing secure session or short-lived socket
+token.
+
+Client subscribes only to contexts it is authorized to view.
+
+Server envelope:
+
+``` json
+{
+  "event_id": "...",
+  "event_type": "process_step.started",
+  "occurred_at": "2026-09-21T14:00:00Z",
+  "organization_id": "...",
+  "workspace_id": "...",
+  "entity": {
+    "type": "process_step",
+    "id": "..."
+  },
+  "data": {}
+}
+```
+
+Important events:
+
+``` text
+project.created
+project.updated
+section.created
+section.updated
+card.created
+card.updated
+card.deleted
+assignment.changed
+process_step.ready
+process_step.started
+process_step.paused
+process_step.resumed
+process_step.completed
+process_step.reopened
+dependency.unlocked
+notification.created
+permission.changed
+```
+
+Realtime event is a hint/state update, not an authorization bypass.
+Client may refetch authoritative data.
+
+# 21. Timer payload contract
+
+For active step:
+
+``` json
+{
+  "status": "active",
+  "accumulated_seconds": 2314,
+  "started_at": "2026-09-21T14:25:10Z",
+  "server_now": "2026-09-21T14:31:00Z"
+}
+```
+
+Client computes:
+
+``` text
+accumulated_seconds + elapsed_since(started_at)
+```
+
+When paused/completed:
+
+``` json
+{
+  "status": "paused",
+  "accumulated_seconds": 2664,
+  "started_at": null
+}
+```
+
+Periodically resync using server time/state to limit drift.
+
+# 22. Templates
+
+``` text
+GET    /.../card-templates
+POST   /.../card-templates
+GET    /.../card-templates/{id}
+PATCH  /.../card-templates/{id}
+POST   /.../card-templates/{id}/publish
+
+GET    /.../process-templates
+POST   /.../process-templates
+GET    /.../process-templates/{id}
+PATCH  /.../process-templates/{id}
+POST   /.../process-templates/{id}/publish
+
+POST /.../cards/{card_id}/apply-card-template
+POST /.../cards/{card_id}/apply-process-template
+```
+
+Applying a template records the exact version used.
+
+# 23. Checklists/forms/approvals
+
+``` text
+GET  /.../process-steps/{step_id}/checklist
+PUT  /.../checklist-items/{item_id}/completion
+
+GET  /.../process-steps/{step_id}/forms
+POST /.../forms/{form_id}/submissions
+
+POST /.../process-steps/{step_id}/submit-for-approval
+POST /.../approvals/{approval_id}/approve
+POST /.../approvals/{approval_id}/return
+```
+
+Approval decision requires authorization.
+
+# 24. Audit and activity
+
+``` text
+GET /.../cards/{card_id}/activity
+GET /.../process-steps/{step_id}/activity
+GET /organizations/{org}/audit
+```
+
+Audit access requires explicit permission.
+
+Audit results are paginated and filterable.
+
+# 25. Trash / restore
+
+``` text
+GET  /organizations/{org}/workspaces/{ws}/trash
+POST /.../trash/{entity_type}/{entity_id}/restore
+```
+
+Permanent deletion, if exposed at all, is a separate high-privilege
+action with retention rules.
+
+# 26. Notifications
+
+``` text
+GET   /organizations/{org}/notifications
+POST  /organizations/{org}/notifications/{id}/read
+POST  /organizations/{org}/notifications/read-all
+
+GET   /organizations/{org}/notification-preferences
+PUT   /organizations/{org}/notification-preferences
+```
+
+Notification payloads include a safe deep-link descriptor rather than
+requiring frontend string parsing.
+
+# 27. Files
+
+Upload flow should support direct-to-object-storage presigned upload
+when appropriate.
+
+``` text
+POST /.../files/upload-intent
+POST /.../files/{file_id}/complete-upload
+GET  /.../files/{file_id}
+GET  /.../files/{file_id}/download
+DELETE /.../files/{file_id}
+```
+
+The backend validates: - membership, - permission, - tenant ownership, -
+file size/type policy, - attachment target.
+
+# 28. Comments and mentions
+
+``` text
+GET    /.../cards/{card_id}/comments
+POST   /.../cards/{card_id}/comments
+PATCH  /.../comments/{comment_id}
+DELETE /.../comments/{comment_id}
+```
+
+Mentions are parsed/validated server-side from explicit user IDs, not
+only display-name text.
+
+# 29. Search
+
+``` text
+GET /organizations/{org}/workspaces/{ws}/search?q=...
+```
+
+Return grouped results:
+
+``` json
+{
+  "data": {
+    "projects": [],
+    "sections": [],
+    "cards": [],
+    "users": []
+  }
+}
+```
+
+Only authorized resources may appear.
+
+# 30. Saved views
+
+``` text
+GET    /.../saved-views
+POST   /.../saved-views
+PATCH  /.../saved-views/{id}
+DELETE /.../saved-views/{id}
+```
+
+# 31. Bulk operations
+
+Use preview for consequential bulk actions.
+
+``` text
+POST /.../cards/bulk/preview
+POST /.../cards/bulk/execute
+```
+
+Preview response:
+
+``` json
+{
+  "data": {
+    "matched": 148,
+    "allowed": 143,
+    "blocked": 5,
+    "warnings": []
+  }
+}
+```
+
+Execution requires an operation token/idempotency key from preview where
+appropriate.
+
+# 32. Import/export
+
+``` text
+POST /.../imports
+POST /.../imports/{id}/mapping
+POST /.../imports/{id}/preview
+POST /.../imports/{id}/commit
+GET  /.../imports/{id}
+
+POST /.../exports
+GET  /.../exports/{id}
+```
+
+Heavy jobs return `202 Accepted`.
+
+# 33. Reporting
+
+``` text
+GET /.../reports/operations
+GET /.../reports/time
+GET /.../reports/bottlenecks
+```
+
+Filters:
+
+``` text
+date range
+project
+section
+team
+employee
+process
+step
+status
+```
+
+Reports return operational facts; do not embed opaque employee
+performance scoring.
+
+# 34. Billing and subscription
+
+Organization owner/billing-admin endpoints:
+
+``` text
+GET  /organizations/{org}/billing/subscription
+GET  /organizations/{org}/billing/entitlements
+GET  /organizations/{org}/billing/usage
+GET  /organizations/{org}/billing/invoices
+
+POST /organizations/{org}/billing/checkout
+POST /organizations/{org}/billing/change-plan
+POST /organizations/{org}/billing/cancel
+```
+
+Provider webhook is outside tenant-authenticated namespace:
+
+``` text
+POST /api/v1/billing/webhooks/{provider}
+```
+
+Requirements: - verify signature, - idempotently process provider event
+ID, - persist billing event, - update subscription, - recompute
+entitlements, - emit internal event.
+
+Feature checks use entitlements, not plan-name string comparisons.
+
+# 35. Automations
+
+``` text
+GET    /.../automations
+POST   /.../automations
+PATCH  /.../automations/{id}
+DELETE /.../automations/{id}
+POST   /.../automations/{id}/test
+GET    /.../automations/{id}/runs
+```
+
+Automation actions execute asynchronously and idempotently.
+
+# 36. Public API keys and webhooks
+
+``` text
+GET    /organizations/{org}/api-keys
+POST   /organizations/{org}/api-keys
+DELETE /organizations/{org}/api-keys/{id}
+
+GET    /organizations/{org}/webhooks
+POST   /organizations/{org}/webhooks
+PATCH  /organizations/{org}/webhooks/{id}
+DELETE /organizations/{org}/webhooks/{id}
+GET    /organizations/{org}/webhooks/{id}/deliveries
+```
+
+Raw API key is shown once at creation.
+
+Webhook deliveries are signed.
+
+# 37. Pagination
+
+Prefer cursor pagination for large mutable collections.
+
+Example:
+
+``` text
+?limit=50&cursor=opaque_cursor
+```
+
+Response:
+
+``` json
+{
+  "data": [],
+  "meta": {
+    "next_cursor": "..."
+  }
+}
+```
+
+Do not expose database offsets as a long-term pagination contract for
+high-volume feeds.
+
+# 38. Filtering and sorting
+
+Use predictable query parameters for simple filters.
+
+For complex saved-view filtering, define a typed filter JSON schema
+shared by frontend/backend contract generation.
+
+Never concatenate client filter strings into SQL.
+
+# 39. Optimistic concurrency
+
+Editable resource response:
+
+``` json
+{
+  "id": "...",
+  "revision": 12
+}
+```
+
+Mutation:
+
+``` json
+{
+  "title": "New title",
+  "expected_revision": 12
+}
+```
+
+Conflict:
+
+``` json
+{
+  "error": {
+    "code": "REVISION_CONFLICT",
+    "message": "This item changed after you opened it.",
+    "details": {
+      "current_revision": 13
+    }
+  }
+}
+```
+
+Frontend offers refresh/reconcile rather than silently overwriting.
+
+# 40. Idempotency
+
+Commands at risk of duplicate side effects accept:
+
+``` text
+Idempotency-Key: <opaque unique value>
+```
+
+Examples: - task start/pause/resume/complete, - invitation, - bulk
+execute, - import commit, - checkout creation.
+
+Same key + same actor/tenant/route returns the original outcome or safe
+equivalent.
+
+# 41. Permission behavior
+
+Every endpoint maps to explicit permissions.
+
+Examples:
+
+``` text
+GET projects            projects:view
+POST projects           projects:create
+PATCH project           projects:update
+DELETE project          projects:delete
+
+POST step/start         tasks:start
+POST step/pause         tasks:pause
+POST step/complete      tasks:complete
+POST step/reopen        tasks:reopen
+
+GET audit               audit:view
+POST invitation         users:invite
+POST billing/change     billing:manage
+```
+
+Scope evaluation occurs after permission lookup.
+
+# 42. Domain error codes
+
+Maintain stable machine-readable codes.
+
+Initial catalog:
+
+``` text
+AUTH_REQUIRED
+EMAIL_NOT_VERIFIED
+MEMBERSHIP_REQUIRED
+PERMISSION_DENIED
+RESOURCE_NOT_FOUND
+VALIDATION_ERROR
+REVISION_CONFLICT
+DEPENDENCY_BLOCKED
+DEPENDENCY_CYCLE
+ACTIVE_TASK_EXISTS
+TASK_NOT_ASSIGNED
+INVALID_STATE_TRANSITION
+COMPLETION_REQUIREMENTS_NOT_MET
+APPROVAL_REQUIRED
+IDEMPOTENCY_CONFLICT
+FEATURE_NOT_AVAILABLE
+USAGE_LIMIT_REACHED
+RATE_LIMITED
+UPLOAD_REJECTED
+```
+
+Frontend behavior should key off `code`, never parse human message
+strings.
+
+# 43. OpenAPI and generated contracts
+
+Rust backend owns the HTTP contract.
+
+Generate/maintain OpenAPI.
+
+Frontend should consume generated TypeScript API types/client where
+practical.
+
+CI must detect accidental contract drift.
+
+Do not manually duplicate dozens of request/response interfaces in two
+languages if generation can safely prevent drift.
+
+# 44. Realtime + REST recovery rule
+
+WebSocket is not the sole source of truth.
+
+On: - reconnect, - sequence gap, - unknown event, - stale revision,
+
+the client refetches affected REST resources.
+
+This makes realtime resilient instead of fragile.
+
+# 45. First API implementation order
+
+The coding agent must implement HTTP contracts in this sequence:
+
+``` text
+01 auth/me/login/logout
+02 organizations
+03 workspaces
+04 memberships/invitations
+05 roles/permissions
+06 projects
+07 sections
+08 cards
+09 properties
+10 processes
+11 process steps
+12 assignments
+13 dependencies
+14 task runtime commands
+15 My Tasks
+16 realtime WebSocket
+17 live operations/TV
+18 templates
+19 audit/restore
+20 notifications
+21 files
+22 search
+23 billing entitlement foundation
+```
+
+Do not expose unfinished future endpoints as fake stubs unless
+explicitly needed for contract-first development.
+
+# 46. Critical end-to-end contract
+
+The following must work before V1 is accepted:
+
+``` text
+Admin:
+POST project
+POST section
+POST card
+POST/apply process template
+POST assignment
+
+Employee:
+GET /me/tasks
+POST step/start
+
+Server:
+creates time session
+writes audit
+writes outbox event
+pushes WebSocket event
+
+Admin/TV:
+receives active task
+renders live timer locally
+
+Employee:
+POST pause
+POST resume
+POST complete
+
+Server:
+closes sessions accurately
+validates completion
+unlocks dependent step
+creates notification
+pushes realtime events
+
+Admin:
+can inspect activity/audit
+
+Authorized user:
+can reopen an accidental completion
+
+All clients:
+converge without manual refresh
+```
+
+------------------------------------------------------------------------
+
+## Final API rule
+
+> Use REST to express authoritative business commands and queries; use
+> WebSocket to propagate changes. Never let generic CRUD endpoints
+> bypass workflow, permission, dependency, timing, audit, or tenant
+> rules.
+
+---
+
+# 47. Localization / Locale Contract
+
+User-facing clients resolve language from:
+
+```text
+User preference
+→ Organization default
+→ tr-TR
+```
+
+Initial supported locales:
+
+```text
+tr-TR
+en
+```
+
+Relevant preference endpoints may include:
+
+```text
+GET   /api/v1/me/preferences
+PATCH /api/v1/me/preferences
+
+GET   /api/v1/organizations/{org}/settings
+PATCH /api/v1/organizations/{org}/settings
+```
+
+Example user preference:
+
+```json
+{
+  "locale": "tr-TR",
+  "timezone": "Europe/Istanbul"
+}
+```
+
+Example organization settings:
+
+```json
+{
+  "default_locale": "tr-TR",
+  "default_timezone": "Europe/Istanbul",
+  "default_currency": "TRY",
+  "terminology": {
+    "card": "İş Emri"
+  }
+}
+```
+
+API error `code` values, event types, permission keys, status codes, and field names remain language-neutral.
+
+Example:
+
+```json
+{
+  "error": {
+    "code": "DEPENDENCY_BLOCKED",
+    "message": "Bu görev henüz başlatılamaz."
+  }
+}
+```
+
+Clients must branch on `code`, never on localized `message`.
+
+For WebSocket events, transmit canonical structured data. Clients render localized UI text.
+
+Notification/email generation must resolve the recipient language; persisted event identity remains canonical.

@@ -1,0 +1,64 @@
+@import 'tailwindcss';
+@import '@platform/ui/tokens.css';
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-ui);
+  font-size: var(--text-body);
+  line-height: 1.5;
+}
+
+main {
+  padding: var(--space-6);
+  overflow-wrap: anywhere;
+}
+
+h1 {
+  font-size: var(--text-title);
+  font-weight: 600;
+  margin-block: 0 var(--space-4);
+}
+
+p {
+  margin-block: 0 var(--space-4);
+}
+a {
+  color: var(--primary);
+  text-underline-offset: var(--space-1);
+}
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: var(--space-1);
+}
+
+.skip-link {
+  position: fixed;
+  inset-block-start: var(--space-2);
+  inset-inline-start: var(--space-2);
+  padding: var(--space-3);
+  background: var(--surface);
+  transform: translateY(-200%);
+}
+.skip-link:focus {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}

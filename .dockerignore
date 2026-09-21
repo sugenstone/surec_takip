@@ -1,0 +1,14 @@
+.git
+.env
+.env.*
+!.env.example
+node_modules
+**/node_modules
+**/.svelte-kit
+**/build
+target
+.npm-cache
+.playwright
+test-results
+playwright-report
+*.log

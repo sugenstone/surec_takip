@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend format, lint, types, unit, build, e2e
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --include=optional --no-audit --no-fund
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
+  backend:
+    name: Rust format, clippy, tests, contract drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.92.0
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - run: cargo test --workspace --locked
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --include=optional --no-audit --no-fund
+      - run: npm run contracts:check
+
+  database:
+    name: PostgreSQL migration and integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: platform
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: platform_dev
+        ports:
+          - 15432:5432
+        options: >-
+          --health-cmd "pg_isready -U platform -d platform_dev"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    env:
+      POSTGRES_PASSWORD: ci
+      POSTGRES_PORT: '15432'
+      DATABASE_URL: postgres://platform:ci@127.0.0.1:15432/platform_dev
+      TEST_DATABASE_URL: postgres://platform:ci@127.0.0.1:15432/postgres
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@1.92.0
+      - uses: Swatinem/rust-cache@v2
+      # Repo scripts read .env; CI provides the same variables with fixed credentials.
+      - run: |
+          printf '%s\n' \
+            'POSTGRES_USER=platform' \
+            'POSTGRES_PASSWORD=ci' \
+            'POSTGRES_DB=platform_dev' \
+            'POSTGRES_PORT=15432' \
+            'DATABASE_URL=postgres://platform:ci@127.0.0.1:15432/platform_dev' \
+            'TEST_DATABASE_URL=postgres://platform:ci@127.0.0.1:15432/postgres' \
+            'DATABASE_MAX_CONNECTIONS=10' \
+            'SERVER_BIND=127.0.0.1:8080' \
+            'RUST_LOG=platform_server=info' \
+            'API_PORT=8080' \
+            'WEB_PORT=3000' \
+            '' > .env
+      - run: npm run test:db
+
+  docker:
+    name: Docker clean-volume compose smoke
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: ci
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm run test:docker

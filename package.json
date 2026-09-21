@@ -1,0 +1,60 @@
+{
+  "name": "workflow-operations-platform",
+  "version": "0.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "packages/ui",
+    "packages/contracts"
+  ],
+  "engines": {
+    "node": ">=24 <25",
+    "npm": ">=11 <12"
+  },
+  "packageManager": "npm@11.6.0",
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
+    "@sveltejs/vite-plugin-svelte": "7.3.0",
+    "@tailwindcss/vite": "4.3.3",
+    "@types/node": "24.13.6",
+    "eslint": "10.11.0",
+    "eslint-plugin-svelte": "3.23.0",
+    "globals": "16.5.0",
+    "openapi-typescript": "7.13.0",
+    "prettier": "3.9.8",
+    "prettier-plugin-svelte": "3.5.2",
+    "svelte-check": "4.7.6",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.70.1",
+    "vite": "8.3.0",
+    "vitest": "4.1.11"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "npm run dev --workspace @platform/web",
+    "build": "npm run build --workspace @platform/web",
+    "typecheck": "npm run typecheck --workspace @platform/web",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "check:web": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run build && npm run test:e2e",
+    "setup:env": "node scripts/setup-env.mjs",
+    "dev:server": "node --env-file=.env scripts/cargo.mjs run --locked --bin platform-server",
+    "db:migrate": "node --env-file=.env scripts/cargo.mjs run --locked --bin migrate -- up",
+    "db:verify": "node --env-file=.env scripts/cargo.mjs run --locked --bin migrate -- verify",
+    "db:revert": "node --env-file=.env scripts/cargo.mjs run --locked --bin migrate -- revert",
+    "db:migration:add": "node scripts/migration-add.mjs",
+    "test:db": "node --env-file=.env scripts/cargo.mjs --test-db test --workspace --locked --features integration --test database",
+    "test:server": "cargo test --workspace --locked",
+    "check:server": "cargo fmt --all --check && cargo clippy --workspace --all-targets --all-features --locked -- -D warnings && cargo test --workspace --locked",
+    "contracts:generate": "node scripts/contracts.mjs",
+    "contracts:check": "node scripts/contracts.mjs --check",
+    "docker:up": "docker compose up --build --detach --wait --wait-timeout 180",
+    "docker:down": "docker compose down",
+    "test:docker": "node scripts/docker-smoke.mjs"
+  }
+}

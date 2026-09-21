@@ -1,0 +1,11 @@
+{
+  "name": "@platform/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./schema": {
+      "types": "./src/schema.d.ts"
+    }
+  }
+}

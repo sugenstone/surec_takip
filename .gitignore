@@ -1,0 +1,28 @@
+# Local credentials and environment files
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# JavaScript and Svelte build output
+node_modules/
+.svelte-kit/
+build/
+dist/
+coverage/
+playwright-report/
+test-results/
+.npm-cache/
+.playwright/
+**/.npm-cache/
+
+# Rust build output; Cargo.lock will be committed with the Rust workspace
+target/
+
+# Local tooling and operating system files
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+.vscode/
