@@ -3,11 +3,11 @@
 Genel amaçlı, multi-tenant iş ve operasyon platformu. Mimari modular monolith;
 PostgreSQL doğruluk kaynağıdır. Varsayılan arayüz dili tr-TR, ikinci dil en.
 
-**Durum:** First Agent Mission 2–6 altyapı çalışması tamamlandı. SvelteKit ve
-Axum foundation, gerçek PostgreSQL migration kontrolleri ve Docker doğrulaması
-çalışıyor; CI workflow oluşturuldu (repo henüz commit/uzak repositoryye sahip
-olmadığından hosted CI çalıştırması bekliyor). Auth, users/sessions, tenant
-tabloları ve domain özellikleri henüz uygulanmadı.
+**Durum:** First Agent Mission 2–6 tamamlandı (Faz 1, hosted CI dahil yeşil).
+Adım 7 olan users/sessions authentication foundation tamamlandı: Argon2id
+login/logout/me, HttpOnly cookie session'lar ve login ekranı çalışıyor.
+Organizations, workspaces, RBAC, tenant context ve domain özellikleri henüz
+uygulanmadı; session yalnızca kimlik doğrular, üyelik yetkisi vermez.
 
 ## Bağlayıcı belgeler
 
@@ -20,6 +20,7 @@ tabloları ve domain özellikleri henüz uygulanmadı.
 - [Başlangıç incelemesi](docs/decisions/0001-bootstrap-review.md)
 - [Foundation kararları](docs/decisions/0002-platform-foundation.md)
 - [Docker/CI doğrulaması](docs/decisions/0003-docker-ci-verification.md)
+- [Users/sessions auth](docs/decisions/0004-users-sessions-auth.md)
 
 ## Mevcut yapı
 
@@ -72,8 +73,32 @@ npm run dev
 ```
 
 Frontend Vite varsayılan adresi `http://localhost:5173`, backend adresi
-`http://127.0.0.1:8080`. Domain bağlantısı veya authenticated app shell yoktur.
-Frontend kök sayfası yalnızca ürün adını gösterir; demo dashboard değildir.
+`http://127.0.0.1:8080`. Vite, `/api` isteklerini backend'e proxy'ler
+(`API_PROXY_TARGET` ile değiştirilir); SSR kendi API_ORIGIN adresini kullanır.
+
+### Authentication (users/sessions)
+
+İlk kullanıcı `user-admin` ile oluşturulur (parola yalnız `USER_PASSWORD`
+environment değişkeninden; argumente/log'a girmez):
+
+```powershell
+$env:USER_PASSWORD = 'guclu-bir-parola'
+npm run user:create -- admin@example.test 'Yönetici'
+```
+
+Ardından `http://localhost:5173/login` ekranından giriş yapılır. Kök sayfa
+kimlik doğrulama ister; üst barda kullanıcı adı ve çıkış düğmesi görünür.
+
+- `POST /api/v1/auth/login`: Argon2id doğrulama; başarılıysa `platform_session`
+  HttpOnly cookie'si set edilir (SameSite=Lax, Path=/, Max-Age=SESSION_TTL).
+- `GET /api/v1/auth/me`: geçerli oturumla kullanıcı bilgisi; oturumsuz 401
+  `AUTH_REQUIRED`.
+- `POST /api/v1/auth/logout`: oturumu sunucuda geçersiz kılar, cookie'yi temizler.
+- Bilinmeyen e-posta, yanlış parola ve disabled hesap aynı 401
+  `AUTH_INVALID_CREDENTIALS` gövdesini döndürür (hesap varlığı sızdırılmaz).
+- Session token DB'de yalnız SHA-256 digest olarak saklanır; süre DB saatinden
+  hesaplanır ve logout revoked işaretler. Public register ve
+  forgot/reset/verify endpoint'leri henüz yok (bkz. karar kaydı 0004).
 
 - `GET /api/v1/health`: HTTP süreci canlıysa 200.
 - `GET /api/v1/ready`: gerçek PostgreSQL SELECT 1 başarılıysa 200, aksi halde 503.
@@ -94,19 +119,25 @@ bileşenleri raw renk veya sektör kavramları taşımaz. SSR dil durumu global 
 
 ## Environment değişkenleri
 
-| Değişken                 | Anlam                                                             |
-| ------------------------ | ----------------------------------------------------------------- |
-| POSTGRES_USER            | Yerel PostgreSQL bootstrap kullanıcısı; varsayılan platform       |
-| POSTGRES_PASSWORD        | Yerel rastgele parola; gerçek değer commit/log edilmez            |
-| POSTGRES_DB              | Yerel development DB; varsayılan platform_dev                     |
-| POSTGRES_PORT            | Host DB portu; varsayılan 15432                                   |
-| DATABASE_URL             | Native server/migration bağlantısı; PostgreSQL URL zorunlu        |
-| TEST_DATABASE_URL        | SQLx'in izole test DB'lerini oluşturabildiği ayrı test bağlantısı |
-| DATABASE_MAX_CONNECTIONS | 1–100 arası pool limiti; varsayılan 10                            |
-| SERVER_BIND              | Native bind; varsayılan 127.0.0.1:8080                            |
-| RUST_LOG                 | Tracing filtresi; varsayılan platform_server=info                 |
-| API_PORT                 | Compose host API portu; varsayılan 8080                           |
-| WEB_PORT                 | Compose host frontend portu; varsayılan 3000                      |
+| Değişken                    | Anlam                                                                 |
+| --------------------------- | --------------------------------------------------------------------- |
+| POSTGRES_USER               | Yerel PostgreSQL bootstrap kullanıcısı; varsayılan platform           |
+| POSTGRES_PASSWORD           | Yerel rastgele parola; gerçek değer commit/log edilmez                |
+| POSTGRES_DB                 | Yerel development DB; varsayılan platform_dev                         |
+| POSTGRES_PORT               | Host DB portu; varsayılan 15432                                       |
+| DATABASE_URL                | Native server/migration bağlantısı; PostgreSQL URL zorunlu            |
+| TEST_DATABASE_URL           | SQLx'in izole test DB'lerini oluşturabildiği ayrı test bağlantısı     |
+| DATABASE_MAX_CONNECTIONS    | 1–100 arası pool limiti; varsayılan 10                                |
+| SERVER_BIND                 | Native bind; varsayılan 127.0.0.1:8080                                |
+| RUST_LOG                    | Tracing filtresi; varsayılan platform_server=info                     |
+| API_PORT                    | Compose host API portu; varsayılan 8080                               |
+| WEB_PORT                    | Compose host frontend portu; varsayılan 3000                          |
+| SESSION_COOKIE_SECURE       | Session cookie Secure bayrağı; kod varsayılanı true, yerel .env false |
+| SESSION_TTL_HOURS           | Oturum süresi; varsayılan 12 saat (1–720)                             |
+| ARGON2_M_COST/T_COST/P_COST | Password hash parametreleri; varsayılan 19456/2/1 (OWASP)             |
+| USER_PASSWORD               | `user-admin create` için tek kullanımlık parola kaynağı; loglanmaz    |
+| API_PROXY_TARGET            | Vite dev `/api` proxy hedefi; varsayılan http://127.0.0.1:8080        |
+| API_ORIGIN                  | SSR'nin backend'e erişim adresi; varsayılan http://127.0.0.1:8080     |
 
 Port veya kimlik bilgisi değiştirilirse native DATABASE_URL ve TEST_DATABASE_URL
 birlikte güncellenmelidir. Yerel bootstrap kullanıcısı production least-privilege
@@ -115,7 +146,8 @@ rol politikası değildir. Production secrets ve deployment bu adımın kapsamı
 
 ## Migration disiplini
 
-Tek infrastructure migration `citext` kurar; domain tablosu yaratmaz. SQLx
+Mevcut migration'lar: `001` citext extension; `002` users + sessions
+(citext UNIQUE email, UNIQUE token_hash digest, expiry CHECK). SQLx
 `_sqlx_migrations` tablosunda version/checksum tutar. Uygulanmış SQL dosyası
 sonradan değiştirilmez; yeni migration eklenir. Dosyalar LF satır sonuyla tutulur.
 
@@ -157,17 +189,25 @@ CI'da zorunludur. Database olmadan sadece unit/HTTP testleri için
 `npm run test:server` kullanılır. Entegrasyon testi sessizce atlanmaz; ayrı feature
 ve komutla çağrılır.
 
-Windows'ta kurulu Chrome ile doğrulanan browser komutu:
+Tam stack browser testleri (izole Compose ortamı: PostgreSQL + migration +
+backend, 28081/25433 portlarında; `user-admin` ile seed; sonunda teardown):
+
+```powershell
+npm run test:e2e
+```
+
+Script kendi Compose project'ini yönetir; çalışırken Docker Engine gerekir.
+Windows'ta kurulu Chrome kullanımı:
 
 ```powershell
 $env:PLAYWRIGHT_CHANNEL = 'chrome'
 npm run test:e2e
 ```
 
-Linux/macOS eşdeğeri environment değişkeni aynı Playwright ayarına bağlanır.
-Bu ortamda Playwright Chromium indirmesi zaman aşımına uğradı; kurulu Chrome
-ile testler tamamlandı. Testler tr-TR/en, 360/1280 px, klavye, 404, tema ve
-paralel SSR dil izolasyonunu kapsar. Ürün kritik E2E akışı henüz mevcut değildir.
+Testler tr-TR/en, 360/1280 px, klavye, 404, tema, paralel SSR dil izolasyonu
+ve gerçek auth akışını (login, yanlış parola, HttpOnly cookie, logout sonrası
+oturum geçersizliği) kapsar. Ürün kritik E2E akışı (proje/süreç/TV) henüz
+mevcut değildir.
 
 Kod formatlamak ve sözleşme yenilemek için:
 
@@ -211,16 +251,16 @@ tutulur.
 
 ## CI
 
-`.github/workflows/ci.yml` dört iş çalıştırır ve yerel doğrulama komutlarının
-aynılarını kullanır: frontend (format/lint/typecheck/unit/build + Playwright
-e2e), backend (Rust fmt/clippy/test + OpenAPI/TypeScript contract drift),
-database (`postgres:16-alpine` service üzerinde `test:db` integration) ve
-docker (`test:docker` smoke). Workflow YAML sözdizimi doğrulandı; repository
-henüz commit ve uzak repositoryye sahip olmadığından hosted çalıştırma
-yapılmadı — ilk push'ta çalışacaktır.
+`.github/workflows/ci.yml` beş iş çalıştırır ve yerel doğrulama komutlarının
+aynılarını kullanır: frontend (format/lint/typecheck/unit/build), e2e (Docker
+stack üzerinde Playwright), backend (Rust fmt/clippy/test + OpenAPI/TypeScript
+contract drift), database (`postgres:16-alpine` service üzerinde `test:db`
+integration) ve docker (`test:docker` smoke). Faz 1 kapanışında (commit
+78a7b4d) beş iş de hosted'da yeşildi.
 
 ## Sonraki aşama
 
-Faz 1 kalite koşulları sağlandıktan sonra First Agent Mission adım 7:
-users/sessions; ardından organizations, workspaces, tenant middleware ve
-cross-tenant testler. Bu güvenlik kapıları geçmeden domain özelliklerine geçilmez.
+First Agent Mission sırası: organizations/memberships → workspaces/memberships
+→ tenant context middleware → cross-tenant güvenlik testleri (geçmeden
+ilerlenmez) → roles/permissions → minimal app shell → projects. Register/
+invitation akışı organizations fazında sözleşmeyle tanımlanacaktır.

@@ -18,6 +18,11 @@ describe('language foundation', () => {
     expect(translate('en', 'navigation.skip')).toBe('Skip to content');
     expect(translate('tr-TR', 'navigation.skip')).toBe('İçeriğe geç');
   });
+  it('interpolates named placeholders and keeps unknown ones intact', () => {
+    expect(translate('tr-TR', 'home.welcome', { name: 'Ayşe' })).toBe('Merhaba, Ayşe');
+    expect(translate('en', 'home.welcome', { name: 'Ayşe' })).toBe('Hello, Ayşe');
+    expect(translate('en', 'home.welcome', { other: 'x' })).toBe('Hello, {name}');
+  });
   it('uses locale and explicit time zone formatting', () => {
     expect(formatNumber('tr-TR', 1250.5)).toBe('1.250,5');
     expect(formatNumber('en', 1250.5)).toBe('1,250.5');

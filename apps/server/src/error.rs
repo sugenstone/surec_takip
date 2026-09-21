@@ -12,6 +12,10 @@ pub enum ErrorCode {
     ResourceNotFound,
     MethodNotAllowed,
     ServiceNotReady,
+    AuthRequired,
+    AuthInvalidCredentials,
+    ValidationError,
+    InternalError,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -29,31 +33,68 @@ pub struct ErrorEnvelope {
 
 pub struct ApiError {
     code: ErrorCode,
+    status: StatusCode,
+    message: &'static str,
+    details: serde_json::Value,
     request_id: String,
 }
 
 impl ApiError {
     pub fn new(code: ErrorCode, request_id: String) -> Self {
-        Self { code, request_id }
-    }
-}
-
-impl IntoResponse for ApiError {
-    fn into_response(self) -> Response {
-        let (status, message) = match self.code {
+        let (status, message) = match code {
             ErrorCode::ResourceNotFound => (StatusCode::NOT_FOUND, "Resource not found."),
             ErrorCode::MethodNotAllowed => (StatusCode::METHOD_NOT_ALLOWED, "Method not allowed."),
             ErrorCode::ServiceNotReady => {
                 (StatusCode::SERVICE_UNAVAILABLE, "Service is not ready.")
             }
+            ErrorCode::AuthRequired => (StatusCode::UNAUTHORIZED, "Authentication is required."),
+            ErrorCode::AuthInvalidCredentials => {
+                (StatusCode::UNAUTHORIZED, "Email or password is incorrect.")
+            }
+            ErrorCode::ValidationError => {
+                (StatusCode::UNPROCESSABLE_ENTITY, "Some fields are invalid.")
+            }
+            ErrorCode::InternalError => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "An unexpected error occurred.",
+            ),
         };
-        (
+        Self {
+            code,
             status,
+            message,
+            details: serde_json::json!({}),
+            request_id,
+        }
+    }
+
+    // Malformed request bodies use 400 per the HTTP status conventions while
+    // keeping the same stable VALIDATION_ERROR code as field-level failures.
+    pub fn malformed_json(request_id: String) -> Self {
+        Self {
+            status: StatusCode::BAD_REQUEST,
+            message: "The request body is not valid JSON.",
+            ..Self::new(ErrorCode::ValidationError, request_id)
+        }
+    }
+
+    pub fn invalid_fields(fields: serde_json::Value, request_id: String) -> Self {
+        Self {
+            details: serde_json::json!({ "fields": fields }),
+            ..Self::new(ErrorCode::ValidationError, request_id)
+        }
+    }
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        (
+            self.status,
             Json(ErrorEnvelope {
                 error: ErrorBody {
                     code: self.code,
-                    message: message.into(),
-                    details: serde_json::json!({}),
+                    message: self.message.into(),
+                    details: self.details,
                     request_id: self.request_id,
                 },
             }),

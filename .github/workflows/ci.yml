@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   frontend:
-    name: Frontend format, lint, types, unit, build, e2e
+    name: Frontend format, lint, types, unit, build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -29,7 +29,22 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  e2e:
+    name: Browser e2e against full local stack
+    runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: ci
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci --include=optional --no-audit --no-fund
       - run: npx playwright install --with-deps chromium
+      # The runner's Docker daemon builds the stack: db + migrate + server.
       - run: npm run test:e2e
 
   backend:

@@ -128,7 +128,7 @@ TypeScript schema is `packages/contracts/src/schema.d.ts`; drift is checked
 against Rust definitions. Future endpoints below remain unimplemented until
 their phase and must never return fabricated success.
 
-Initial contract may use secure HTTP-only cookie sessions.
+Sessions use a secure HTTP-only cookie (`platform_session`).
 
 ``` text
 POST /api/v1/auth/login
@@ -138,6 +138,16 @@ POST /api/v1/auth/password/forgot
 POST /api/v1/auth/password/reset
 POST /api/v1/auth/email/verify
 ```
+
+Implementation status (users/sessions foundation): `login`, `logout` and
+`me` are implemented with Argon2id password hashing; the opaque session
+token is stored server-side only as a SHA-256 digest. Login, logout and
+`me` are the only implemented endpoints above; `password/forgot`,
+`password/reset` and `email/verify` wait for the email infrastructure
+phase and their token models will be contracted before implementation.
+All credential failures (unknown email, wrong password, disabled
+account) return `401 AUTH_INVALID_CREDENTIALS` with an identical body so
+account existence is not revealed.
 
 Example `GET /auth/me`:
 
@@ -996,6 +1006,7 @@ Initial catalog:
 
 ``` text
 AUTH_REQUIRED
+AUTH_INVALID_CREDENTIALS
 EMAIL_NOT_VERIFIED
 MEMBERSHIP_REQUIRED
 PERMISSION_DENIED
@@ -1014,6 +1025,7 @@ FEATURE_NOT_AVAILABLE
 USAGE_LIMIT_REACHED
 RATE_LIMITED
 UPLOAD_REJECTED
+INTERNAL_ERROR
 ```
 
 Frontend behavior should key off `code`, never parse human message

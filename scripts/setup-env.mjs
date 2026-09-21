@@ -19,6 +19,8 @@ if (existsSync('.env')) {
       'RUST_LOG=platform_server=info',
       'API_PORT=8080',
       'WEB_PORT=3000',
+      // Local development runs over plain HTTP; production sets true.
+      'SESSION_COOKIE_SECURE=false',
       '',
     ].join('\n'),
     { flag: 'wx', mode: 0o600 },

@@ -10,3 +10,6 @@
 </svelte:head>
 
 <h1>{translate(data.locale, 'app.name')}</h1>
+{#if data.user}
+  <p>{translate(data.locale, 'home.welcome', { name: data.user.display_name })}</p>
+{/if}

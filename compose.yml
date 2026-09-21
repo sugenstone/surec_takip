@@ -36,6 +36,8 @@ services:
       <<: *database-environment
       SERVER_BIND: 0.0.0.0:8080
       RUST_LOG: ${RUST_LOG:-platform_server=info}
+      # Local Docker dev serves plain HTTP; production deployments must set true.
+      SESSION_COOKIE_SECURE: ${SESSION_COOKIE_SECURE:-false}
     ports:
       - '127.0.0.1:${API_PORT:-8080}:8080'
     depends_on:

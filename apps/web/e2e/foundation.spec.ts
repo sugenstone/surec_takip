@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+// The root page requires authentication; unauthenticated visitors see the
+// localized login screen, which now carries the foundation checks.
 for (const locale of ['tr-TR', 'en']) {
   for (const width of [360, 1280]) {
     test(`${locale} at ${width}px supports keyboard and localized errors`, async ({
@@ -11,9 +13,10 @@ for (const locale of ['tr-TR', 'en']) {
       const errors: string[] = [];
       page.on('pageerror', (error) => errors.push(error.message));
       await page.goto('/');
+      await expect(page).toHaveURL(/\/login$/);
       await expect(page.locator('html')).toHaveAttribute('lang', locale);
       await expect(page.getByRole('heading', { level: 1 })).toHaveText(
-        locale === 'en' ? 'Workflow & Operations' : 'İş ve Operasyon Yönetimi',
+        locale === 'en' ? 'Sign in' : 'Giriş yap',
       );
       await page.keyboard.press('Tab');
       await expect(page.getByRole('link').first()).toBeFocused();
@@ -40,7 +43,7 @@ test('theme preference survives reload and system respects dark mode', async ({
   context,
 }) => {
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
-  await page.goto('/');
+  await page.goto('/login');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   for (const theme of ['dark', 'system']) {
     await context.addCookies([{ name: 'theme', value: theme, url: 'http://127.0.0.1:4173' }]);
@@ -53,7 +56,7 @@ test('theme preference survives reload and system respects dark mode', async ({
 test('parallel SSR locale requests do not contaminate each other', async ({ request }) => {
   const responses = await Promise.all(
     ['en', 'tr-TR', 'en', 'tr-TR'].map((locale) =>
-      request.get('/', { headers: { Cookie: `locale=${locale}` } }),
+      request.get('/login', { headers: { Cookie: `locale=${locale}` } }),
     ),
   );
   for (const [i, response] of responses.entries()) {

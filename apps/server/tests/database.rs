@@ -3,11 +3,18 @@ use axum::{
     http::{Request, StatusCode},
 };
 use platform_server::{
+    AppState,
+    config::AuthConfig,
     migrations::{self, MIGRATOR},
     router,
 };
 use sqlx::PgPool;
 use tower::ServiceExt;
+
+fn test_state(pool: PgPool) -> AppState {
+    AppState::new(pool, AuthConfig::fast_for_tests())
+        .unwrap_or_else(|message| panic!("{}", message))
+}
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn migrated_database_is_ready_and_up_is_idempotent(
@@ -20,11 +27,15 @@ async fn migrated_database_is_ready_and_up_is_idempotent(
             .fetch_one(&pool)
             .await?;
     assert!(equal);
+    let expected = MIGRATOR
+        .iter()
+        .filter(|migration| !migration.migration_type.is_down_migration())
+        .count();
     let count: i64 = sqlx::query_scalar("SELECT count(*) FROM _sqlx_migrations")
         .fetch_one(&pool)
         .await?;
-    assert_eq!(count, 1);
-    let response = router(pool)
+    assert_eq!(count, expected as i64);
+    let response = router(test_state(pool))
         .oneshot(
             Request::builder()
                 .uri("/api/v1/ready")
@@ -40,11 +51,23 @@ async fn migration_can_revert_and_reapply_on_disposable_database(
     pool: PgPool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     migrations::revert_last(&pool).await?;
-    let exists: bool =
+    let users_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users')",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(
+        !users_exists,
+        "revert must remove the users_sessions migration"
+    );
+    let citext_exists: bool =
         sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'citext')")
             .fetch_one(&pool)
             .await?;
-    assert!(!exists);
+    assert!(
+        citext_exists,
+        "revert of the newest migration must keep earlier migrations applied"
+    );
     assert!(migrations::verify(&pool).await.is_err());
     MIGRATOR.run(&pool).await?;
     migrations::verify(&pool).await?;
@@ -65,7 +88,8 @@ async fn changed_migration_checksum_is_rejected(
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn revert_preserves_dependent_data(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
-    sqlx::query("CREATE TABLE migration_safety_probe (email citext)")
+    // A dependent object on users must block rollback instead of being dropped.
+    sqlx::query("CREATE TABLE migration_safety_probe (user_id uuid REFERENCES users (id))")
         .execute(&pool)
         .await?;
     assert!(migrations::revert_last(&pool).await.is_err());

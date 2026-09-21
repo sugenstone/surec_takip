@@ -16,8 +16,17 @@ export function resolveLocale(user?: unknown, organization?: unknown): Locale {
 }
 
 // Locale stays request/component-local; SSR requests never share mutable language state.
-export function translate(locale: Locale, key: TranslationKey): string {
-  return messages[locale][key];
+// Interpolation replaces {placeholders} from the translation dictionary only.
+export function translate(
+  locale: Locale,
+  key: TranslationKey,
+  params?: Record<string, string>,
+): string {
+  const template = messages[locale][key];
+  if (!params) return template;
+  return template.replace(/\{(\w+)\}/g, (match, name: string) =>
+    name in params ? params[name] : match,
+  );
 }
 
 export function formatNumber(locale: Locale, value: number, options?: Intl.NumberFormatOptions) {

@@ -11,6 +11,7 @@ COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certifica
 COPY --from=build /workspace/target/debug/platform-server /app/platform-server
 COPY --from=build /workspace/target/debug/migrate /app/migrate
 COPY --from=build /workspace/target/debug/probe /app/probe
+COPY --from=build /workspace/target/debug/user-admin /app/user-admin
 USER 10001:10001
 EXPOSE 8080
 CMD ["/app/platform-server"]

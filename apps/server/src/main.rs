@@ -1,5 +1,5 @@
-use platform_server::{config::Config, database, router};
-use std::process::ExitCode;
+use platform_server::{AppState, config::Config, database, router};
+use std::{net::SocketAddr, process::ExitCode};
 use tracing_subscriber::EnvFilter;
 
 #[tokio::main]
@@ -24,13 +24,17 @@ async fn main() -> ExitCode {
 async fn run() -> Result<(), &'static str> {
     let config = Config::from_env()?;
     let pool = database::pool(&config);
+    let state = AppState::new(pool.clone(), config.auth)?;
     let listener = tokio::net::TcpListener::bind(config.bind)
         .await
         .map_err(|_| "SERVER_BIND_FAILED")?;
     tracing::info!(bind = %config.bind, "server_started");
-    let result = axum::serve(listener, router(pool.clone()))
-        .with_graceful_shutdown(shutdown())
-        .await;
+    let result = axum::serve(
+        listener,
+        router(state).into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown())
+    .await;
     pool.close().await;
     result.map_err(|_| "SERVER_IO_FAILED")
 }
