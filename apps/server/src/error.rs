@@ -15,6 +15,7 @@ pub enum ErrorCode {
     AuthRequired,
     AuthInvalidCredentials,
     PermissionDenied,
+    InvitationInvalid,
     ValidationError,
     InternalError,
 }
@@ -64,6 +65,10 @@ impl ApiError {
             ErrorCode::PermissionDenied => (
                 StatusCode::FORBIDDEN,
                 "You do not have permission to perform this action.",
+            ),
+            ErrorCode::InvitationInvalid => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "This invitation is not valid.",
             ),
             ErrorCode::ValidationError => {
                 (StatusCode::UNPROCESSABLE_ENTITY, "Some fields are invalid.")

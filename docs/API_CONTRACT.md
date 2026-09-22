@@ -236,9 +236,28 @@ management remain unimplemented until their phases. `GET /auth/me`
 
 ``` text
 GET    /organizations/{org}/members
+GET    /organizations/{org}/members
 POST   /organizations/{org}/invitations
 DELETE /organizations/{org}/invitations/{invitation_id}
 POST   /invitations/{token}/accept
+
+Implementation status (invitations foundation): all four endpoints are
+implemented with the accept route moved to `POST /api/v1/invitations/accept`
+with the token in the JSON body (never in a URL — request logs must not
+capture invitation secrets). Creation requires the `members:invite`
+permission at organization scope (Owner only by default); responses follow
+401/404/403 ordering. The raw invitation token is returned exactly ONCE in
+the creation response (email delivery is a later phase) and never appears in
+list responses or logs; only its SHA-256 digest is stored. Acceptance is an
+identity-bound atomic transaction: authenticated user + citext-equal account
+email + valid pending token. Every acceptance failure returns the same
+generic `422 INVITATION_INVALID` — expired, revoked, consumed, tampered and
+wrong-identity cases are indistinguishable. Accepted invitations grant
+exactly the tenant's built-in `member` role (no client-chosen roles, no
+Owner invitations, no implicit workspace membership). Re-inviting a pending
+recipient revokes the old token and issues a new one (one live token per
+tenant+email). Acceptance never resurrects old privileges; an already-active
+member keeps existing grants untouched.
 
 PATCH  /organizations/{org}/members/{user_id}
 DELETE /organizations/{org}/members/{user_id}

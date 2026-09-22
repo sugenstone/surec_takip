@@ -47,16 +47,20 @@ pub async fn bootstrap_builtin_roles(
     .execute(&mut *transaction)
     .await
     .map_err(|_| ApiError::new(ErrorCode::InternalError, String::new()))?;
-    // Grants reference the permission catalog by stable key.
-    sqlx::query(
-        "INSERT INTO role_permissions (role_id, permission_id, scope) \
-         SELECT $1, p.id, 'organization' FROM permissions p WHERE p.key = $2",
-    )
-    .bind(owner_role)
-    .bind(WORKSPACES_CREATE.0)
-    .execute(&mut *transaction)
-    .await
-    .map_err(|_| ApiError::new(ErrorCode::InternalError, String::new()))?;
+    // Grants reference the permission catalog by stable key. Extending the
+    // grant list is a deliberate bootstrap decision, never automatic flow
+    // (ADR 0008: Owner does not implicitly gain future permissions).
+    for key in [WORKSPACES_CREATE.0, crate::invitations::MEMBERS_INVITE.0] {
+        sqlx::query(
+            "INSERT INTO role_permissions (role_id, permission_id, scope) \
+             SELECT $1, p.id, 'organization' FROM permissions p WHERE p.key = $2",
+        )
+        .bind(owner_role)
+        .bind(key)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|_| ApiError::new(ErrorCode::InternalError, String::new()))?;
+    }
     sqlx::query(
         "INSERT INTO membership_roles (id, tenant_id, user_id, role_id, workspace_id) \
          VALUES ($1, $2, $3, $4, NULL)",

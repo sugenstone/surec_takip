@@ -3,6 +3,7 @@ pub mod config;
 pub mod context;
 pub mod database;
 pub mod error;
+pub mod invitations;
 pub mod migrations;
 pub mod organizations;
 pub mod password;
@@ -17,7 +18,7 @@ use axum::{
     http::{HeaderValue, header},
     middleware::{self, Next},
     response::Response,
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use error::{ApiError, ErrorCode};
 use serde::Serialize;
@@ -97,6 +98,18 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/v1/organizations/{organization_id}/roles",
             get(organizations::list_roles),
+        )
+        .route(
+            "/api/v1/organizations/{organization_id}/invitations",
+            post(invitations::create_invitation).get(invitations::list_invitations),
+        )
+        .route(
+            "/api/v1/organizations/{organization_id}/invitations/{invitation_id}",
+            delete(invitations::revoke_invitation),
+        )
+        .route(
+            "/api/v1/invitations/accept",
+            post(invitations::accept_invitation),
         )
         .route(
             "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}",
@@ -187,6 +200,10 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         workspaces::get_workspace,
         organizations::list_permissions,
         organizations::list_roles,
+        invitations::create_invitation,
+        invitations::list_invitations,
+        invitations::revoke_invitation,
+        invitations::accept_invitation,
     ),
     components(schemas(
         HealthResponse,
@@ -208,6 +225,14 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         organizations::PermissionListResponse,
         organizations::RolePublic,
         organizations::RoleListResponse,
+        invitations::CreateInvitationRequest,
+        invitations::CreateInvitationResponse,
+        invitations::CreateInvitationData,
+        invitations::InvitationPublic,
+        invitations::InvitationListResponse,
+        invitations::AcceptInvitationRequest,
+        invitations::AcceptInvitationResponse,
+        invitations::AcceptInvitationData,
         auth::LoginRequest,
         auth::LoginResponse,
         auth::LoginData,

@@ -3,14 +3,12 @@
 Genel amaçlı, multi-tenant iş ve operasyon platformu. Mimari modular monolith;
 PostgreSQL doğruluk kaynağıdır. Varsayılan arayüz dili tr-TR, ikinci dil en.
 
-**Durum:** First Agent Mission 2–10 + cross-tenant security milestone
-(adım 11–12, adversarial suite) tamamlandı ve adım 13 RBAC foundation
-tamamlandı: permission tabanlı yetkilendirme (roles/permissions/
-role_permissions/membership_roles), atomic Owner bootstrap, deterministic
-backfill, privilege-resurrection önleme, `workspaces:create` izin kapısı
-(403 PERMISSION_DENIED politikası) ve katalog endpoint'leri. Authorization
-asla role adına bakmaz; tenant izolasyonu gevşemedi. Role yönetim API'leri,
-invitations ve domain özellikleri henüz uygulanmadı.
+**Durum:** First Agent Mission 2–13 + cross-tenant security milestone
+tamamlandı. Adım 14 user invitations tamamlandı: `members:invite` izni,
+SHA-256 digest'li opaque token davetiyeleri, atomik kimlik bağlı kabul,
+generic enumeration-resistant red, re-invite replace, reactivation'ta
+privilege-resurrection önleme. Role yönetim API'leri ve domain özellikleri
+henüz uygulanmadı.
 
 ## Bağlayıcı belgeler
 
@@ -28,6 +26,7 @@ invitations ve domain özellikleri henüz uygulanmadı.
 - [Organizations/memberships](docs/decisions/0006-organizations-memberships.md)
 - [Workspaces/memberships](docs/decisions/0007-workspaces-memberships.md)
 - [RBAC authorization](docs/decisions/0008-rbac-authorization.md)
+- [User invitations](docs/decisions/0009-user-invitations.md)
 
 ## Mevcut yapı
 
@@ -126,7 +125,18 @@ Header'daki organizasyon seçici yalnız presentation context'idir (cookie);
 backend her istekte üyeliği yeniden doğrular. Slug asla authorization
 sınırı değildir.
 
-## Rolller ve izinler (RBAC)
+## Davetiyeler
+
+Owner rolündeki üye (`members:invite` izni) yeni üye davet edebilir: `POST
+/api/v1/organizations/{id}/invitations` yanıtında raw token bir kez döner
+(email altyapısı sonraki fazda). Kabul: `POST /api/v1/invitations/accept`
+body'de token — kimlik doğrulanmış + citext-eşit email şartıyla atomik
+transaction'da membership (create/reactivate) + builtin `member` rolü. Tüm
+reddedilen kabul denemeleri tek generic `422 INVITATION_INVALID` döner
+(enumeration yok). Re-invite eski pending token'ı revoke eder. Owner
+davetiyesi ve istemci-seçili rol YOKTUR. Detaylar ADR 0009'da.
+
+## Roller ve izinler (RBAC)
 
 Organizasyon yaratma, builtin 'owner'/'member' rollerini ve yaratıcının
 Owner atamasını tek transaction'da oluşturur. Pre-RBAC organizasyonlara
@@ -206,7 +216,7 @@ Mevcut migration'lar: `001` citext; `002` users + sessions; `003`
 organizations + organization_memberships (ADR 0006); `004` workspaces +
 workspace_memberships (ADR 0007); `005` RBAC — permissions/roles/
 role_permissions/membership_roles + composite FK'ler + pre-RBAC org'lar
-için deterministic Owner backfill (ADR 0008). SQLx
+için (ADR 0008); `006` invitations + `members:invite` + Owner grant (ADR 0009). SQLx
 `_sqlx_migrations` tablosunda version/checksum tutar. Uygulanmış SQL dosyası
 sonradan değiştirilmez; yeni migration eklenir. Dosyalar LF satır sonuyla tutulur.
 

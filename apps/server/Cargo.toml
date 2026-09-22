@@ -56,3 +56,7 @@ required-features = ["integration"]
 [[test]]
 name = "rbac"
 required-features = ["integration"]
+
+[[test]]
+name = "invitations"
+required-features = ["integration"]

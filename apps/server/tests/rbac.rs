@@ -188,7 +188,10 @@ async fn organization_creation_bootstraps_owner_atomically(
     .bind(org)
     .fetch_one(&pool)
     .await?;
-    assert_eq!(grants, 1, "owner grants workspaces:create at org scope");
+    assert_eq!(
+        grants, 2,
+        "owner grants workspaces:create + members:invite at org scope"
+    );
     let assignments: i64 =
         sqlx::query_scalar("SELECT count(*) FROM membership_roles WHERE tenant_id = $1")
             .bind(org)
@@ -547,13 +550,21 @@ async fn workspace_authorization_combines_org_and_workspace_grants(
 async fn pre_rbac_organizations_get_no_automatic_owner_but_support_explicit_bootstrap(
     pool: PgPool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    use platform_server::migrations::{self, MIGRATOR};
+    use platform_server::migrations::MIGRATOR;
 
     // Simulate a pre-RBAC organization: revert the RBAC migration, create an
     // organization with two members — the LATE joiner being the hypothetical
     // real administrator — then re-apply. Historical order in test data is
     // arbitrary by design: the migration must NOT guess.
-    migrations::revert_last(&pool).await?;
+    // Revert directly to the pre-RBAC version (revert_last verifies full
+    // history first, so it cannot be called twice in a row).
+    let target = MIGRATOR
+        .iter()
+        .filter(|m| !m.migration_type.is_down_migration())
+        .map(|m| m.version)
+        .collect::<Vec<_>>();
+    let target = target.iter().rev().nth(2).copied().unwrap_or(0);
+    MIGRATOR.undo(&pool, target).await?;
     create_user(&pool, "early@example.test").await;
     let late = create_user(&pool, "late@example.test").await;
     let org: Uuid = sqlx::query_scalar(
