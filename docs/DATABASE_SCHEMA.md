@@ -136,7 +136,7 @@ UNIQUE (tenant_id, slug)
 ``` text
 id uuid PK
 tenant_id FK organizations
-workspace_id FK workspaces
+workspace_id composite FK -> workspaces(tenant_id, id)
 user_id FK users
 status text NOT NULL
 created_at
@@ -144,6 +144,18 @@ updated_at
 deleted_at timestamptz NULL
 UNIQUE (workspace_id, user_id)
 ```
+
+Workspace membership `status` values are `active` and `deleted` (soft
+delete), mirroring organization memberships. The UNIQUE constraint is hard
+(partial değil): one membership row per (workspace, user) ever exists and
+rejoining reactivates that row (ADR 0006/0007). The composite foreign key
+`(tenant_id, workspace_id)` referencing `workspaces (tenant_id, id)` makes a
+cross-tenant membership row impossible to store: the claimed tenant must
+match the workspace's actual tenant. Whether the user is still a valid
+organization member cannot be expressed by constraints; every access path
+therefore joins organization membership validity at read time, so a stale
+workspace membership grants nothing once the organization membership is
+gone or the organization is deleted.
 
 Membership authorization requires both an active status and `deleted_at IS NULL`.
 Soft deletion must never grant access. The existing uniqueness constraints remain:

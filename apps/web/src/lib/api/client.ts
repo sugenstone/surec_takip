@@ -62,6 +62,7 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
 export type SessionUser = components['schemas']['UserPublic'];
 export type OrganizationSummary = components['schemas']['OrganizationSummary'];
 export type OrganizationPublic = components['schemas']['OrganizationPublic'];
+export type WorkspacePublic = components['schemas']['WorkspacePublic'];
 export type MeData = components['schemas']['MeData'];
 
 export async function loginRequest(email: string, password: string): Promise<SessionUser> {
@@ -86,4 +87,25 @@ export async function createOrganization(name: string): Promise<OrganizationPubl
     body: JSON.stringify({ name }),
   });
   return body.data.organization;
+}
+
+export async function listWorkspaces(organizationId: string): Promise<WorkspacePublic[]> {
+  const body = await request<{ data: WorkspacePublic[] }>(
+    `/api/v1/organizations/${organizationId}/workspaces`,
+  );
+  return body.data;
+}
+
+export async function createWorkspace(
+  organizationId: string,
+  name: string,
+): Promise<WorkspacePublic> {
+  const body = await request<{
+    data: { workspace: WorkspacePublic };
+  }>(`/api/v1/organizations/${organizationId}/workspaces`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  return body.data.workspace;
 }

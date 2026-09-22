@@ -194,6 +194,26 @@ GET  /organizations/{organization_id}/workspaces/{workspace_id}
 PATCH /organizations/{organization_id}/workspaces/{workspace_id}
 ```
 
+Implementation status (workspaces foundation): workspace `POST` (create),
+`GET` (list) and single `GET` are implemented under the organization path.
+Access model: a workspace is visible/accessible only when the caller has
+BOTH a valid organization membership for the parent organization AND a valid
+workspace membership, joined to non-deleted workspace/organization rows —
+organization membership alone does NOT grant workspace access. Creation is
+restricted to organization members and is atomic: workspace + creator
+workspace membership commit in one transaction (201 returns workspace +
+membership). Workspace slugs are unique per organization (case-insensitive
+citext); a taken slug inside that organization returns 422
+`VALIDATION_ERROR` with `details.fields.slug = ["Already taken"]`, while the
+same slug may exist in other organizations. Parent-child paths are
+authoritative: `GET .../workspaces/{id}` requires the workspace to belong to
+the organization in the path; mismatched combinations — even for a user who
+is a member of both organizations — foreign organizations, unknown or
+malformed ids, deleted memberships, deleted workspaces and deleted
+organizations all return the same 404 `RESOURCE_NOT_FOUND`. `PATCH` and
+member management remain unimplemented until their phases. `/auth/me` is
+unchanged: workspaces are fetched per organization via the list endpoint.
+
 Implementation status (organizations foundation): `POST /organizations`,
 `GET /organizations` and `GET /organizations/{organization_id}` are
 implemented. Creation is authenticated and atomic: the organization and the

@@ -26,7 +26,9 @@ test('empty state offers creation; created organization appears as quiet context
   await page.getByLabel('Organizasyon adı').fill('E2e İlk Organizasyon');
   await page.getByRole('button', { name: 'Organizasyon oluştur' }).click();
   // The organization shows in the list and as single-org header context.
-  await expect(page.locator('.org-name')).toHaveText('E2e İlk Organizasyon');
+  await expect(page.locator('section[aria-labelledby="org-title"] .org-name')).toHaveText(
+    'E2e İlk Organizasyon',
+  );
   await expect(page.locator('.single-org')).toHaveText('E2e İlk Organizasyon');
   await expect(page.locator('#organization-switcher')).toHaveCount(0);
 });

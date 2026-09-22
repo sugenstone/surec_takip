@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { ApiRequestError } from './client';
-import { loginErrorMessageKey, organizationErrorMessageKey } from './errors';
-import { validOrganizationName } from '../org';
+import {
+  loginErrorMessageKey,
+  organizationErrorMessageKey,
+  workspaceErrorMessageKey,
+} from './errors';
+import { validOrganizationName, validWorkspaceName } from '../org';
 
 describe('login error mapping by stable API code', () => {
   it('maps credential, network and unknown codes to distinct translation keys', () => {
@@ -32,6 +36,24 @@ describe('organization error mapping by stable API code', () => {
     const network = new ApiRequestError(0, 'NETWORK_ERROR', 'msg', '');
     expect(organizationErrorMessageKey(network)).toBe('org.error.network');
     expect(organizationErrorMessageKey(new Error('x'))).toBe('org.error.unexpected');
+  });
+});
+
+describe('workspace error mapping by stable API code', () => {
+  it('maps validation, network and unknown codes to distinct translation keys', () => {
+    const invalid = new ApiRequestError(422, 'VALIDATION_ERROR', 'msg', 'id-5');
+    expect(workspaceErrorMessageKey(invalid)).toBe('workspace.error.invalidName');
+    const network = new ApiRequestError(0, 'NETWORK_ERROR', 'msg', '');
+    expect(workspaceErrorMessageKey(network)).toBe('workspace.error.network');
+    expect(workspaceErrorMessageKey(new Error('x'))).toBe('workspace.error.unexpected');
+  });
+});
+
+describe('workspace name validation', () => {
+  it('shares the organization name rules', () => {
+    expect(validWorkspaceName('Atölye')).toBe(true);
+    expect(validWorkspaceName('   ')).toBe(false);
+    expect(validWorkspaceName('a'.repeat(201))).toBe(false);
   });
 });
 

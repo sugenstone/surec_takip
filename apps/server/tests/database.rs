@@ -51,22 +51,22 @@ async fn migration_can_revert_and_reapply_on_disposable_database(
     pool: PgPool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     migrations::revert_last(&pool).await?;
+    let workspaces_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'workspaces')",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(
+        !workspaces_exists,
+        "revert must remove the workspaces migration"
+    );
     let organizations_exists: bool = sqlx::query_scalar(
         "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'organizations')",
     )
     .fetch_one(&pool)
     .await?;
     assert!(
-        !organizations_exists,
-        "revert must remove the organizations migration"
-    );
-    let users_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'users')",
-    )
-    .fetch_one(&pool)
-    .await?;
-    assert!(
-        users_exists,
+        organizations_exists,
         "revert of the newest migration must keep earlier migrations applied"
     );
     assert!(migrations::verify(&pool).await.is_err());
@@ -89,10 +89,10 @@ async fn changed_migration_checksum_is_rejected(
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn revert_preserves_dependent_data(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
-    // A dependent object on organizations must block rollback instead of
+    // A dependent object on workspaces must block rollback instead of
     // being dropped.
     sqlx::query(
-        "CREATE TABLE migration_safety_probe (organization_id uuid REFERENCES organizations (id))",
+        "CREATE TABLE migration_safety_probe (workspace_id uuid REFERENCES workspaces (id))",
     )
     .execute(&pool)
     .await?;

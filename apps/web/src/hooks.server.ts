@@ -1,7 +1,7 @@
 import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { resolveLocale, translate } from '$lib/i18n';
 import { resolveTheme } from '$lib/theme';
-import type { MeData } from '$lib/api/client';
+import type { MeData, WorkspacePublic } from '$lib/api/client';
 
 // Server-side API base; in dev the browser uses the Vite /api proxy while
 // SSR calls the backend directly. Production routes both through one origin.
@@ -16,12 +16,22 @@ export const handle: Handle = async ({ event, resolve }) => {
   // Only organizations the backend reports as visible memberships; the
   // organization cookie below is UX context, never an access grant.
   event.locals.organizations = session?.organizations ?? [];
-  const requested = event.cookies.get('organization') ?? null;
+  const requestedOrg = event.cookies.get('organization') ?? null;
   event.locals.currentOrganizationId = event.locals.organizations.some(
-    (organization) => organization.id === requested,
+    (organization) => organization.id === requestedOrg,
   )
-    ? requested
+    ? requestedOrg
     : (event.locals.organizations[0]?.id ?? null);
+  // Workspace context resolves strictly against the server-returned
+  // permitted list of the CURRENT organization: a stale or foreign cookie
+  // value never survives an organization switch.
+  event.locals.workspaces = await loadWorkspaces(event, event.locals.currentOrganizationId);
+  const requestedWs = event.cookies.get('workspace') ?? null;
+  event.locals.currentWorkspaceId = event.locals.workspaces.some(
+    (workspace) => workspace.id === requestedWs,
+  )
+    ? requestedWs
+    : (event.locals.workspaces[0]?.id ?? null);
   const response = await resolve(event, {
     transformPageChunk: ({ html }) =>
       html.replace('%app.locale%', event.locals.locale).replace('%app.theme%', event.locals.theme),
@@ -51,6 +61,27 @@ async function loadSession(event: {
     // Backend unreachable during SSR behaves as an unauthenticated request;
     // the login form surfaces connectivity problems on submit.
     return null;
+  }
+}
+
+// Workspaces for the selected organization only; the backend enforces both
+// memberships on this endpoint, so the result is the permitted list itself.
+async function loadWorkspaces(
+  event: { cookies: { get(name: string): string | undefined }; fetch: typeof fetch },
+  organizationId: string | null,
+): Promise<WorkspacePublic[]> {
+  if (!organizationId) return [];
+  try {
+    const token = event.cookies.get('platform_session');
+    if (!token) return [];
+    const response = await event.fetch(
+      `${apiOrigin}/api/v1/organizations/${organizationId}/workspaces`,
+      { headers: { cookie: `platform_session=${token}` } },
+    );
+    if (!response.ok) return [];
+    return ((await response.json()) as { data?: WorkspacePublic[] }).data ?? [];
+  } catch {
+    return [];
   }
 }
 

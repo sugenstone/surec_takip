@@ -6,4 +6,6 @@ export const load: LayoutServerLoad = ({ locals }) => ({
   user: locals.user,
   organizations: locals.organizations,
   currentOrganizationId: locals.currentOrganizationId,
+  workspaces: locals.workspaces,
+  currentWorkspaceId: locals.currentWorkspaceId,
 });

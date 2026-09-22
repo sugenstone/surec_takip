@@ -3,12 +3,13 @@
 Genel amaçlı, multi-tenant iş ve operasyon platformu. Mimari modular monolith;
 PostgreSQL doğruluk kaynağıdır. Varsayılan arayüz dili tr-TR, ikinci dil en.
 
-**Durum:** First Agent Mission 2–6 (Faz 1, hosted CI yeşil) ve adım 7
-users/sessions tamamlandı. Adım 8 organizations + organization memberships
-tamamlandı: atomic organizasyon yaratma, aktif üyelik görünürlüğü,
-üyelik-tabanlı erişim sınırı, `/auth/me` organizasyon listesi ve minimal
-switcher/create UI. Workspaces, tenant middleware, RBAC, invitations ve
-domain özellikleri henüz uygulanmadı.
+**Durum:** First Agent Mission 2–8 tamamlandı (her milestone hosted CI'da
+yeşil): Faz 1 altyapı, users/sessions (adım 7), organizations +
+organization memberships (adım 8) ve workspaces + workspace memberships
+(adım 9) — atomic yaratma, çift-üyelik (org ∧ workspace) erişim modeli,
+composite FK ile DB-seviyeli cross-tenant koruması ve org→workspace seçim
+UI'ı dahil. Tenant context middleware, RBAC, invitations ve domain
+özellikleri henüz uygulanmadı.
 
 ## Bağlayıcı belgeler
 
@@ -24,6 +25,7 @@ domain özellikleri henüz uygulanmadı.
 - [Users/sessions auth](docs/decisions/0004-users-sessions-auth.md)
 - [Reusable SaaS Starter kararı](docs/decisions/0005-reusable-saas-starter.md)
 - [Organizations/memberships](docs/decisions/0006-organizations-memberships.md)
+- [Workspaces/memberships](docs/decisions/0007-workspaces-memberships.md)
 
 ## Mevcut yapı
 
@@ -122,6 +124,20 @@ Header'daki organizasyon seçici yalnız presentation context'idir (cookie);
 backend her istekte üyeliği yeniden doğrular. Slug asla authorization
 sınırı değildir.
 
+## Workspaces
+
+Seçili organization altında workspace'ler oluşturulur (`POST
+/api/v1/organizations/{id}/workspaces`; workspace + creator membership tek
+transaction'da). Erişim modeli: workspace'e erişim için geçerli organization
+membership **ve** geçerli workspace membership birlikte gerekir; org üyeliği
+tek başına workspace erişimi vermez. Parent-child path authoritativedir —
+yanlış org/workspace kombinasyonu, foreign/unknown/malformed id ve silinmiş
+kaynaklar aynı 404 ile reddedilir. Slug uniqueness organization başınadır.
+`/auth/me` değişmedi; workspace'ler seçili org için liste endpoint'inden
+alınır. Header'daki workspace seçici presentation context'tir; SSR,
+sunucudan dönen permitted liste ile doğrular ve org değişiminde stale
+seçim taşınmaz. Ayrıntılar ADR 0007'de.
+
 ## Dil ve tema foundation
 
 Çeviri anahtarları `apps/web/src/lib/i18n` altında; Svelte metinleri sözlükten
@@ -162,10 +178,11 @@ rol politikası değildir. Production secrets ve deployment bu adımın kapsamı
 
 ## Migration disiplini
 
-Mevcut migration'lar: `001` citext extension; `002` users + sessions
-(citext UNIQUE email, UNIQUE token_hash digest, expiry CHECK); `003`
-organizations + organization_memberships (citext UNIQUE slug, hard
-UNIQUE (tenant_id, user_id) — soft-deleted dahil, bkz. ADR 0006). SQLx
+Mevcut migration'lar: `001` citext; `002` users + sessions; `003`
+organizations + organization_memberships (bkz. ADR 0006); `004` workspaces +
+workspace_memberships (per-tenant UNIQUE slug, hard UNIQUE
+(workspace_id, user_id), composite FK `(tenant_id, workspace_id)` →
+cross-tenant satır depolanamaz, bkz. ADR 0007). SQLx
 `_sqlx_migrations` tablosunda version/checksum tutar. Uygulanmış SQL dosyası
 sonradan değiştirilmez; yeni migration eklenir. Dosyalar LF satır sonuyla tutulur.
 
@@ -307,7 +324,7 @@ integration) ve docker (`test:docker` smoke). Faz 1 kapanışında (commit
 
 ## Sonraki aşama
 
-First Agent Mission sırası: workspaces/memberships → tenant context
-middleware → cross-tenant güvenlik testleri (geçmeden ilerlenmez) →
+First Agent Mission sırası: tenant context middleware (adım 10) →
+cross-tenant güvenlik testleri (adım 11–12, geçmeden ilerlenmez) →
 roles/permissions → invitations → minimal app shell → starter extraction
 gate değerlendirmesi → projects.

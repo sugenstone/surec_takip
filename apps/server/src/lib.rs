@@ -6,6 +6,7 @@ pub mod migrations;
 pub mod organizations;
 pub mod password;
 pub mod users;
+pub mod workspaces;
 
 use crate::password::PasswordService;
 use axum::{
@@ -82,6 +83,14 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/v1/organizations/{organization_id}",
             get(organizations::get_organization),
+        )
+        .route(
+            "/api/v1/organizations/{organization_id}/workspaces",
+            post(workspaces::create_workspace).get(workspaces::list_workspaces),
+        )
+        .route(
+            "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}",
+            get(workspaces::get_workspace),
         )
         .fallback(not_found)
         .method_not_allowed_fallback(method_not_allowed)
@@ -163,6 +172,9 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         organizations::create_organization,
         organizations::list_organizations,
         organizations::get_organization,
+        workspaces::create_workspace,
+        workspaces::list_workspaces,
+        workspaces::get_workspace,
     ),
     components(schemas(
         HealthResponse,
@@ -174,6 +186,12 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         organizations::OrganizationPublic,
         organizations::MembershipPublic,
         organizations::OrganizationListResponse,
+        workspaces::CreateWorkspaceRequest,
+        workspaces::CreateWorkspaceResponse,
+        workspaces::CreateWorkspaceData,
+        workspaces::WorkspacePublic,
+        workspaces::WorkspaceMembershipPublic,
+        workspaces::WorkspaceListResponse,
         auth::LoginRequest,
         auth::LoginResponse,
         auth::LoginData,

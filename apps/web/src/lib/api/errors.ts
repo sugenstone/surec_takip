@@ -29,3 +29,17 @@ export function organizationErrorMessageKey(error: unknown): TranslationKey {
   }
   return 'org.error.unexpected';
 }
+
+export function workspaceErrorMessageKey(error: unknown): TranslationKey {
+  if (error instanceof ApiRequestError) {
+    switch (error.code) {
+      case 'VALIDATION_ERROR':
+        return 'workspace.error.invalidName';
+      case 'NETWORK_ERROR':
+        return 'workspace.error.network';
+      default:
+        return 'workspace.error.unexpected';
+    }
+  }
+  return 'workspace.error.unexpected';
+}

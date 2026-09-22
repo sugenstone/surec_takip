@@ -1,15 +1,18 @@
 <script lang="ts">
   import { invalidateAll } from '$app/navigation';
-  import { createOrganization } from '$lib/api/client';
-  import { organizationErrorMessageKey } from '$lib/api/errors';
+  import { createOrganization, createWorkspace } from '$lib/api/client';
+  import { organizationErrorMessageKey, workspaceErrorMessageKey } from '$lib/api/errors';
   import { translate, type TranslationKey } from '$lib/i18n';
-  import { validOrganizationName } from '$lib/org';
+  import { validOrganizationName, validWorkspaceName } from '$lib/org';
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
   let name = $state('');
   let pending = $state(false);
   let errorMessage: string | null = $state(null);
+  let workspaceName = $state('');
+  let workspacePending = $state(false);
+  let workspaceErrorMessage: string | null = $state(null);
 
   async function submit(event: SubmitEvent) {
     event.preventDefault();
@@ -29,6 +32,27 @@
       errorMessage = translate(data.locale, key);
     } finally {
       pending = false;
+    }
+  }
+
+  async function submitWorkspace(event: SubmitEvent) {
+    event.preventDefault();
+    workspaceErrorMessage = null;
+    if (workspacePending || !data.currentOrganizationId) return;
+    if (!validWorkspaceName(workspaceName)) {
+      workspaceErrorMessage = translate(data.locale, 'workspace.error.invalidName');
+      return;
+    }
+    workspacePending = true;
+    try {
+      await createWorkspace(data.currentOrganizationId, workspaceName.trim());
+      workspaceName = '';
+      await invalidateAll();
+    } catch (error) {
+      const key: TranslationKey = workspaceErrorMessageKey(error);
+      workspaceErrorMessage = translate(data.locale, key);
+    } finally {
+      workspacePending = false;
     }
   }
 </script>
@@ -83,6 +107,53 @@
       <p class="org-error" role="alert">{errorMessage}</p>
     {/if}
   </section>
+
+  {#if data.currentOrganizationId}
+    <section class="org-section" aria-labelledby="workspace-title">
+      <h2 id="workspace-title">{translate(data.locale, 'workspace.title')}</h2>
+      {#if data.workspaces.length === 0}
+        <div class="empty-state">
+          <p class="empty-title">{translate(data.locale, 'workspace.empty.title')}</p>
+          <p class="empty-description">
+            {translate(data.locale, 'workspace.empty.description')}
+          </p>
+        </div>
+      {:else}
+        <ul class="org-list">
+          {#each data.workspaces as workspace (workspace.id)}
+            <li>
+              <span class="org-name">{workspace.name}</span>
+              <span class="org-slug">{workspace.slug}</span>
+            </li>
+          {/each}
+        </ul>
+      {/if}
+      <form onsubmit={submitWorkspace} method="post" novalidate class="create-form">
+        <label class="field-label" for="workspace-name">
+          {translate(data.locale, 'workspace.create.label')}
+        </label>
+        <div class="create-row">
+          <input
+            id="workspace-name"
+            name="name"
+            type="text"
+            bind:value={workspaceName}
+            required
+            maxlength="200"
+            autocomplete="off"
+          />
+          <button type="submit" disabled={workspacePending}>
+            {workspacePending
+              ? translate(data.locale, 'workspace.create.pending')
+              : translate(data.locale, 'workspace.create.submit')}
+          </button>
+        </div>
+      </form>
+      {#if workspaceErrorMessage}
+        <p class="org-error" role="alert">{workspaceErrorMessage}</p>
+      {/if}
+    </section>
+  {/if}
 {/if}
 
 <style>

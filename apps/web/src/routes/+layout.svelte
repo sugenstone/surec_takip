@@ -9,10 +9,18 @@
   let { data, children }: LayoutProps = $props();
   let signingOut = $state(false);
 
-  // Presentation-only context cookie; the backend re-verifies membership on
+  // Presentation-only context cookies; the backend re-verifies membership on
   // every request regardless of what is stored here.
   async function switchOrganization(id: string) {
     document.cookie = `organization=${id}; Path=/; Max-Age=31536000; SameSite=Lax`;
+    // A workspace selected under the previous organization must not survive
+    // the switch; the stale value is dropped and re-resolved server-side.
+    document.cookie = 'workspace=; Path=/; Max-Age=0; SameSite=Lax';
+    await invalidateAll();
+  }
+
+  async function switchWorkspace(id: string) {
+    document.cookie = `workspace=${id}; Path=/; Max-Age=31536000; SameSite=Lax`;
     await invalidateAll();
   }
 
@@ -53,6 +61,23 @@
       {:else if data.organizations.length === 1}
         <span class="single-org">{data.organizations[0].name}</span>
       {/if}
+      {#if data.currentOrganizationId && data.workspaces.length > 1}
+        <label class="switcher-label" for="workspace-switcher">
+          {translate(data.locale, 'workspace.switcher.label')}
+        </label>
+        <select
+          id="workspace-switcher"
+          class="switcher"
+          value={data.currentWorkspaceId ?? ''}
+          onchange={(event) => switchWorkspace(event.currentTarget.value)}
+        >
+          {#each data.workspaces as workspace (workspace.id)}
+            <option value={workspace.id}>{workspace.name}</option>
+          {/each}
+        </select>
+      {:else if data.currentOrganizationId && data.workspaces.length === 1}
+        <span class="single-org">{data.workspaces[0].name}</span>
+      {/if}
     </div>
     <span class="session-user">
       <span class="session-label">{translate(data.locale, 'auth.signedIn')}</span>
@@ -84,6 +109,7 @@
     gap: var(--space-2);
     margin-inline-end: auto;
     min-width: 0;
+    flex-wrap: wrap;
   }
   .switcher-label {
     color: var(--muted-foreground);

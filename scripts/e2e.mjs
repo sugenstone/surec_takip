@@ -51,17 +51,23 @@ async function playwright() {
 
 try {
   await compose('up', '--build', '--detach', '--wait', '--wait-timeout', '180', 'db', 'server');
-  await compose(
-    'run',
-    '--rm',
-    '-e',
-    'USER_PASSWORD=e2e-password-1',
-    'server',
-    '/app/user-admin',
-    'create',
-    'e2e@example.test',
-    'E2e User',
-  );
+  // Two users let organization- and workspace-specs keep isolated fixtures.
+  for (const [email, displayName] of [
+    ['e2e@example.test', 'E2e User'],
+    ['e2e2@example.test', 'E2e User Two'],
+  ]) {
+    await compose(
+      'run',
+      '--rm',
+      '-e',
+      'USER_PASSWORD=e2e-password-1',
+      'server',
+      '/app/user-admin',
+      'create',
+      email,
+      displayName,
+    );
+  }
   process.exitCode = await playwright();
 } finally {
   await compose('down', '--volumes', '--remove-orphans');

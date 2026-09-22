@@ -36,6 +36,18 @@ pub enum OrganizationError {
     DatabaseError,
 }
 
+impl std::fmt::Display for OrganizationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let message = match self {
+            OrganizationError::SlugAlreadyTaken => "slug already exists",
+            OrganizationError::DatabaseError => "database operation failed",
+        };
+        formatter.write_str(message)
+    }
+}
+
+impl std::error::Error for OrganizationError {}
+
 #[derive(sqlx::FromRow)]
 pub struct OrganizationRow {
     pub id: Uuid,
@@ -210,7 +222,7 @@ pub async fn visible_for_user(
 /// deleted membership, deleted organization) returns None so responses stay
 /// indistinguishable.
 pub async fn find_for_member(
-    pool: &PgPool,
+    executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>,
     organization_id: Uuid,
     user_id: Uuid,
 ) -> Result<Option<OrganizationRow>, OrganizationError> {
@@ -222,7 +234,7 @@ pub async fn find_for_member(
     sqlx::query_as::<_, OrganizationRow>(&sql)
         .bind(organization_id)
         .bind(user_id)
-        .fetch_optional(pool)
+        .fetch_optional(executor)
         .await
         .map_err(|_| OrganizationError::DatabaseError)
 }
