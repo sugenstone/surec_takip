@@ -913,6 +913,7 @@ async fn membership_revocation_between_context_and_transaction_blocks_creation(
             slug: "toctou-ws".to_owned(),
         },
         w.u1,
+        platform_server::rbac::WORKSPACES_CREATE,
     )
     .await;
     assert!(

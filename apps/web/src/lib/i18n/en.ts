@@ -35,6 +35,8 @@ export const en: Record<keyof typeof tr, string> = {
   'workspace.error.invalidName': 'The workspace name is invalid.',
   'workspace.error.network': 'Could not reach the server. Check your connection and try again.',
   'workspace.error.unexpected': 'Could not create the workspace. Please try again.',
+  'workspace.error.forbidden':
+    'You do not have permission for this action. Contact an administrator.',
   'error.notFound.title': 'Page not found',
   'error.notFound.description': 'There is no page at this address.',
   'error.unexpected.title': 'Something went wrong',

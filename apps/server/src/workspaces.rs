@@ -32,6 +32,7 @@ const WORKSPACE_COLUMNS: &str =
 pub enum WorkspaceError {
     SlugAlreadyTaken,
     NotAccessible,
+    Forbidden,
     DatabaseError,
 }
 
@@ -40,6 +41,7 @@ impl std::fmt::Display for WorkspaceError {
         let message = match self {
             WorkspaceError::SlugAlreadyTaken => "slug already exists",
             WorkspaceError::NotAccessible => "organization is not accessible",
+            WorkspaceError::Forbidden => "permission denied",
             WorkspaceError::DatabaseError => "database operation failed",
         };
         formatter.write_str(message)
@@ -132,6 +134,7 @@ pub async fn create_with_membership(
     organization_id: Uuid,
     workspace: &NewWorkspace,
     creator: Uuid,
+    required: crate::rbac::PermissionKey,
 ) -> Result<(WorkspaceRow, WorkspaceMembershipRow), WorkspaceError> {
     let mut transaction = pool
         .begin()
@@ -145,6 +148,19 @@ pub async fn create_with_membership(
         .map_err(|_| WorkspaceError::DatabaseError)?;
     if member.is_none() {
         return Err(WorkspaceError::NotAccessible);
+    }
+    // Permission is revalidated INSIDE the transaction: a revocation racing
+    // the write cannot slip through between the handler check and commit.
+    let authorized = crate::rbac::authorize_organization_in_tx(
+        &mut transaction,
+        organization_id,
+        creator,
+        required,
+    )
+    .await
+    .map_err(|_| WorkspaceError::DatabaseError)?;
+    if !authorized {
+        return Err(WorkspaceError::Forbidden);
     }
     let workspace = insert_workspace(&mut transaction, organization_id, workspace).await?;
     let membership =
@@ -332,11 +348,25 @@ pub async fn create_workspace(
         _ => return Err(ApiError::new(ErrorCode::InternalError, request_id.0)),
     };
 
+    // Eligibility is proven by the context; permission is checked here and
+    // RE-CHECKED inside the mutation transaction (TOCTOU, ADR 0008).
+    let allowed = crate::rbac::authorize_organization(
+        &state.pool,
+        organization_id,
+        creator,
+        crate::rbac::WORKSPACES_CREATE,
+    )
+    .await
+    .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0.clone()))?;
+    if !allowed {
+        return Err(crate::rbac::permission_denied(&request_id));
+    }
     let result = create_with_membership(
         &state.pool,
         organization_id,
         &NewWorkspace { name, slug },
         creator,
+        crate::rbac::WORKSPACES_CREATE,
     )
     .await;
     match result {
@@ -351,6 +381,8 @@ pub async fn create_workspace(
         }
         // Not a visible member of the (possibly nonexistent) organization.
         Err(WorkspaceError::NotAccessible) => Err(not_found()),
+        // Permission revoked between the handler check and the transaction.
+        Err(WorkspaceError::Forbidden) => Err(crate::rbac::permission_denied(&request_id)),
         Err(WorkspaceError::SlugAlreadyTaken) => Err(ApiError::invalid_fields(
             serde_json::json!({ "slug": ["Already taken"] }),
             request_id.0,

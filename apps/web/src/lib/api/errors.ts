@@ -35,6 +35,8 @@ export function workspaceErrorMessageKey(error: unknown): TranslationKey {
     switch (error.code) {
       case 'VALIDATION_ERROR':
         return 'workspace.error.invalidName';
+      case 'PERMISSION_DENIED':
+        return 'workspace.error.forbidden';
       case 'NETWORK_ERROR':
         return 'workspace.error.network';
       default:

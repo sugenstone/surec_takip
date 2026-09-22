@@ -270,3 +270,23 @@ async fn named_path_struct_extraction_ignores_extra_route_parameters()
     assert_eq!(body["workspace_id"], "ws-1");
     Ok(())
 }
+
+#[tokio::test]
+async fn rbac_catalog_endpoints_reject_unauthenticated_requests()
+-> Result<(), Box<dyn std::error::Error>> {
+    let pool = PgPoolOptions::new().connect_lazy("postgres://localhost:1/unavailable")?;
+    let state = test_state(pool);
+    for uri in [
+        "/api/v1/organizations/01a0c5c7-f298-7144-a0f6-96ad1fe99c6f/permissions",
+        "/api/v1/organizations/01a0c5c7-f298-7144-a0f6-96ad1fe99c6f/roles",
+    ] {
+        let response = router(state.clone())
+            .oneshot(Request::builder().uri(uri).body(Body::empty())?)
+            .await?;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED, "{uri}");
+        let bytes = to_bytes(response.into_body(), 4096).await?;
+        let body: serde_json::Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(body["error"]["code"], "AUTH_REQUIRED", "{uri}");
+    }
+    Ok(())
+}

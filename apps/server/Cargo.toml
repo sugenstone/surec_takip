@@ -52,3 +52,7 @@ required-features = ["integration"]
 [[test]]
 name = "tenant_isolation"
 required-features = ["integration"]
+
+[[test]]
+name = "rbac"
+required-features = ["integration"]

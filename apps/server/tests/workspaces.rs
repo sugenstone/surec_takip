@@ -285,6 +285,7 @@ async fn failed_membership_creation_leaves_no_orphan_workspace(
             slug: "orphan-ws".to_owned(),
         },
         Uuid::now_v7(),
+        platform_server::rbac::WORKSPACES_CREATE,
     )
     .await;
     assert!(result.is_err());

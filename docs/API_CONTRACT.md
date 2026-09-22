@@ -274,6 +274,19 @@ PUT /organizations/{org}/members/{user_id}/roles
 
 Role mutation payloads explicitly contain permission keys/scopes.
 
+Implementation status (RBAC foundation): `GET /organizations/{org}/permissions`
+and `GET /organizations/{org}/roles` are implemented as eligibility (any
+active member) read-only catalog endpoints. Role create/update/delete and
+role assignment endpoints remain unimplemented until their phase; assignment
+paths are exercised through service-level tests. `POST .../workspaces` now
+requires the `workspaces:create` permission at organization scope: an
+eligible member without the permission receives `403 PERMISSION_DENIED`
+(stable code, generic message, no role internals); non-members keep the
+uniform 404. Eligibility reads (organization/workspace lists and gets) stay
+membership-based — RBAC never weakens tenant isolation. Authorization is
+permission-key based; role names/labels are never authorization inputs and
+built-in role names are stable identifiers, not translations.
+
 # 9. Projects
 
 ``` text

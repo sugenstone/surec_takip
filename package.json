@@ -49,7 +49,7 @@
     "db:revert": "node --env-file=.env scripts/cargo.mjs run --locked --bin migrate -- revert",
     "db:migration:add": "node scripts/migration-add.mjs",
     "user:create": "node --env-file=.env scripts/cargo.mjs run --locked --quiet --bin user-admin -- create",
-    "test:db": "node --env-file=.env scripts/cargo.mjs --test-db test --workspace --locked --features integration --test database --test auth --test organizations --test workspaces --test context --test tenant_isolation",
+    "test:db": "node --env-file=.env scripts/cargo.mjs --test-db test --workspace --locked --features integration --test database --test auth --test organizations --test workspaces --test context --test tenant_isolation --test rbac",
     "test:server": "cargo test --workspace --locked",
     "check:server": "cargo fmt --all --check && cargo clippy --workspace --all-targets --all-features --locked -- -D warnings && cargo test --workspace --locked",
     "check:prepush": "cargo fmt --all --check && npm run format:check && npm run lint && npm run typecheck && npm test && cargo clippy --workspace --all-targets --all-features --locked -- -D warnings && cargo test --workspace --locked && npm run contracts:check",
@@ -58,6 +58,7 @@
     "contracts:check": "node scripts/contracts.mjs --check",
     "docker:up": "docker compose up --build --detach --wait --wait-timeout 180",
     "docker:down": "docker compose down",
-    "test:docker": "node scripts/docker-smoke.mjs"
+    "test:docker": "node scripts/docker-smoke.mjs",
+    "user:grant-owner": "node --env-file=.env scripts/cargo.mjs run --locked --quiet --bin user-admin -- grant-owner"
   }
 }

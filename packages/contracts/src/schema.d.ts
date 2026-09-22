@@ -95,6 +95,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/organizations/{organization_id}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_permissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization_id}/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_roles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organizations/{organization_id}/workspaces": {
         parameters: {
             query?: never;
@@ -180,7 +212,7 @@ export interface components {
             request_id: string;
         };
         /** @enum {string} */
-        ErrorCode: "RESOURCE_NOT_FOUND" | "METHOD_NOT_ALLOWED" | "SERVICE_NOT_READY" | "AUTH_REQUIRED" | "AUTH_INVALID_CREDENTIALS" | "VALIDATION_ERROR" | "INTERNAL_ERROR";
+        ErrorCode: "RESOURCE_NOT_FOUND" | "METHOD_NOT_ALLOWED" | "SERVICE_NOT_READY" | "AUTH_REQUIRED" | "AUTH_INVALID_CREDENTIALS" | "PERMISSION_DENIED" | "VALIDATION_ERROR" | "INTERNAL_ERROR";
         ErrorEnvelope: {
             error: components["schemas"]["ErrorBody"];
         };
@@ -238,6 +270,23 @@ export interface components {
             name: string;
             role_summary: string[];
             slug: string;
+        };
+        PermissionListResponse: {
+            data: components["schemas"]["PermissionPublic"][];
+        };
+        PermissionPublic: {
+            description: string;
+            key: string;
+        };
+        RoleListResponse: {
+            data: components["schemas"]["RolePublic"][];
+        };
+        RolePublic: {
+            description?: string | null;
+            /** Format: uuid */
+            id: string;
+            is_system: boolean;
+            name: string;
         };
         UserPublic: {
             display_name: string;
@@ -482,6 +531,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrganizationPublic"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_permissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization id */
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PermissionListResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_roles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization id */
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleListResponse"];
                 };
             };
             401: {

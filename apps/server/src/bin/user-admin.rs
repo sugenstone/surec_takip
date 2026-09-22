@@ -22,8 +22,13 @@ async fn main() -> ExitCode {
 
 async fn run() -> Result<(), &'static str> {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.len() == 3 && args[0] == "grant-owner" {
+        return grant_owner(&args[1], &args[2]).await;
+    }
     if args.len() != 3 || args[0] != "create" {
-        return Err("Usage: user-admin create <email> <display_name> (password via USER_PASSWORD)");
+        return Err(
+            "Usage: user-admin create <email> <display_name> (password via USER_PASSWORD)              | user-admin grant-owner <organization_id> <email>",
+        );
     }
     let email = args[1].trim();
     let display_name = args[2].trim();
@@ -62,4 +67,27 @@ async fn run() -> Result<(), &'static str> {
         Err(users::StoreError::EmailAlreadyExists) => Err("EMAIL_ALREADY_EXISTS"),
         Err(users::StoreError::DatabaseError) => Err("USER_CREATE_FAILED"),
     }
+}
+
+// Explicit trusted bootstrap for pre-RBAC organizations (ADR 0008): the
+// migration deliberately does not guess owners; an operator runs this once.
+async fn grant_owner(organization_id: &str, email: &str) -> Result<(), &'static str> {
+    let organization_id = organization_id
+        .parse::<uuid::Uuid>()
+        .map_err(|_| "ORGANIZATION_ID_INVALID")?;
+    let email = email.trim();
+    if email.is_empty() || !email.contains('@') {
+        return Err("EMAIL_INVALID");
+    }
+    let config = Config::from_env()?;
+    let pool = database::pool(&config);
+    let user = users::find_by_email(&pool, email)
+        .await
+        .map_err(|_| "USER_LOOKUP_FAILED")?;
+    let Some(user) = user else {
+        return Err("USER_NOT_FOUND");
+    };
+    platform_server::rbac::assign_owner(&pool, organization_id, user.id).await?;
+    println!("Owner assigned.");
+    Ok(())
 }

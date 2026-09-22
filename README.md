@@ -3,13 +3,14 @@
 Genel amaçlı, multi-tenant iş ve operasyon platformu. Mimari modular monolith;
 PostgreSQL doğruluk kaynağıdır. Varsayılan arayüz dili tr-TR, ikinci dil en.
 
-**Durum:** First Agent Mission 2–8 tamamlandı (her milestone hosted CI'da
-yeşil): Faz 1 altyapı, users/sessions (adım 7), organizations +
-organization memberships (adım 8) ve workspaces + workspace memberships
-(adım 9) — atomic yaratma, çift-üyelik (org ∧ workspace) erişim modeli,
-composite FK ile DB-seviyeli cross-tenant koruması ve org→workspace seçim
-UI'ı dahil. Tenant context middleware, RBAC, invitations ve domain
-özellikleri henüz uygulanmadı.
+**Durum:** First Agent Mission 2–10 + cross-tenant security milestone
+(adım 11–12, adversarial suite) tamamlandı ve adım 13 RBAC foundation
+tamamlandı: permission tabanlı yetkilendirme (roles/permissions/
+role_permissions/membership_roles), atomic Owner bootstrap, deterministic
+backfill, privilege-resurrection önleme, `workspaces:create` izin kapısı
+(403 PERMISSION_DENIED politikası) ve katalog endpoint'leri. Authorization
+asla role adına bakmaz; tenant izolasyonu gevşemedi. Role yönetim API'leri,
+invitations ve domain özellikleri henüz uygulanmadı.
 
 ## Bağlayıcı belgeler
 
@@ -26,6 +27,7 @@ UI'ı dahil. Tenant context middleware, RBAC, invitations ve domain
 - [Reusable SaaS Starter kararı](docs/decisions/0005-reusable-saas-starter.md)
 - [Organizations/memberships](docs/decisions/0006-organizations-memberships.md)
 - [Workspaces/memberships](docs/decisions/0007-workspaces-memberships.md)
+- [RBAC authorization](docs/decisions/0008-rbac-authorization.md)
 
 ## Mevcut yapı
 
@@ -124,6 +126,28 @@ Header'daki organizasyon seçici yalnız presentation context'idir (cookie);
 backend her istekte üyeliği yeniden doğrular. Slug asla authorization
 sınırı değildir.
 
+## Rolller ve izinler (RBAC)
+
+Organizasyon yaratma, builtin 'owner'/'member' rollerini ve yaratıcının
+Owner atamasını tek transaction'da oluşturur. Pre-RBAC organizasyonlara
+migration builtin'leri ekler ama **otomatik Owner atamaz** (creator kaydı
+yoktur; sıra tabanlı tahmin yetki yükseltmesi olurdu) — açık bootstrap
+gerekir:
+
+```powershell
+npm run user:grant-owner -- <organization_id> <email>
+```
+
+Komut yalnızca organizasyonun aktif üyesine izin verir ve idempotentialdır
+(ADR 0008). Yetkilendirme
+permission anahtarlarıyla (`workspaces:create`) değerlendirilir — role
+adları asla authorization girdisi değildir. `POST .../workspaces` için:
+üye olmayan 404; üye ama izinsiz **403 PERMISSION_DENIED**; izinli üye 201.
+Üyelik aktifliği her değerlendirmede yeniden doğrulanır; membership
+deactivation atamaları fiziksel olarak siler → reactivation eski
+ayrıcalıkları diriltmez. `GET .../permissions` ve `GET .../roles` her üyeye
+açık katalog okumalarıdır. Çoklu rol → izin birleşimi.
+
 ## Workspaces
 
 Seçili organization altında workspace'ler oluşturulur (`POST
@@ -179,10 +203,10 @@ rol politikası değildir. Production secrets ve deployment bu adımın kapsamı
 ## Migration disiplini
 
 Mevcut migration'lar: `001` citext; `002` users + sessions; `003`
-organizations + organization_memberships (bkz. ADR 0006); `004` workspaces +
-workspace_memberships (per-tenant UNIQUE slug, hard UNIQUE
-(workspace_id, user_id), composite FK `(tenant_id, workspace_id)` →
-cross-tenant satır depolanamaz, bkz. ADR 0007). SQLx
+organizations + organization_memberships (ADR 0006); `004` workspaces +
+workspace_memberships (ADR 0007); `005` RBAC — permissions/roles/
+role_permissions/membership_roles + composite FK'ler + pre-RBAC org'lar
+için deterministic Owner backfill (ADR 0008). SQLx
 `_sqlx_migrations` tablosunda version/checksum tutar. Uygulanmış SQL dosyası
 sonradan değiştirilmez; yeni migration eklenir. Dosyalar LF satır sonuyla tutulur.
 
@@ -324,7 +348,6 @@ integration) ve docker (`test:docker` smoke). Faz 1 kapanışında (commit
 
 ## Sonraki aşama
 
-First Agent Mission sırası: tenant context middleware (adım 10) →
-cross-tenant güvenlik testleri (adım 11–12, geçmeden ilerlenmez) →
-roles/permissions → invitations → minimal app shell → starter extraction
-gate değerlendirmesi → projects.
+First Agent Mission sırası: invitations (adım 14) → minimal app shell →
+starter extraction gate değerlendirmesi → projects. Role yönetim API'leri
+(custom role CRUD, atama endpoint'leri) admin fazına ertelendi.

@@ -227,12 +227,17 @@ Assign roles to organization/workspace membership context:
 
 ``` text
 id uuid PK
-tenant_id
-user_id
+tenant_id            # composite FK -> roles(tenant_id, id)
+user_id              # composite FK -> organization_memberships(tenant_id, user_id)
 role_id
-workspace_id NULL
+workspace_id NULL    # composite FK -> workspaces(tenant_id, id); NULL = org-wide
 created_at
 ```
+
+Assignments are physically deleted when the membership is deactivated
+(ADR 0008): reactivation never resurrects old privileges. The
+`(tenant_id, user_id)` FK prevents assigning roles to non-members, and
+authorization always joins ACTIVE memberships as defense in depth.
 
 ## 5. Projects, sections and cards
 

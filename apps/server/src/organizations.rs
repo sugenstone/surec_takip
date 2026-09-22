@@ -181,8 +181,9 @@ async fn insert_membership(
     }
 }
 
-/// Organization and creator membership commit atomically: a half-created
-/// tenant must never exist.
+/// Organization, creator membership, built-in roles and the creator's Owner
+/// assignment commit atomically (ADR 0008): a half-created tenant must never
+/// exist, and no organization may exist without an administrator.
 pub async fn create_with_membership(
     pool: &PgPool,
     organization: &NewOrganization,
@@ -194,6 +195,9 @@ pub async fn create_with_membership(
         .map_err(|_| OrganizationError::DatabaseError)?;
     let organization = insert_organization(&mut transaction, organization).await?;
     let membership = insert_membership(&mut transaction, organization.id, creator).await?;
+    crate::rbac::bootstrap_builtin_roles(&mut transaction, organization.id, creator)
+        .await
+        .map_err(|_| OrganizationError::DatabaseError)?;
     transaction
         .commit()
         .await
@@ -428,6 +432,84 @@ pub async fn get_organization(
     // Authentication, membership and malformed/unknown-id semantics are all
     // resolved by the OrganizationContext extractor (single boundary).
     Ok(Json(OrganizationPublic::from(context.organization)))
+}
+
+// ---------------------------------------------------------------------------
+// RBAC catalog reads (eligibility: any active organization member)
+// ---------------------------------------------------------------------------
+
+#[derive(sqlx::FromRow, Serialize, ToSchema)]
+pub struct PermissionPublic {
+    pub key: String,
+    pub description: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct PermissionListResponse {
+    pub data: Vec<PermissionPublic>,
+}
+
+#[derive(sqlx::FromRow, Serialize, ToSchema)]
+pub struct RolePublic {
+    pub id: Uuid,
+    pub name: String,
+    pub description: Option<String>,
+    pub is_system: bool,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct RoleListResponse {
+    pub data: Vec<RolePublic>,
+}
+
+#[utoipa::path(get,
+    path = "/api/v1/organizations/{organization_id}/permissions",
+    params(("organization_id" = Uuid, Path, description = "Organization id")),
+    responses(
+        (status = 200, body = PermissionListResponse),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 404, body = crate::error::ErrorEnvelope),
+    )
+)]
+pub async fn list_permissions(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    context: crate::context::OrganizationContext,
+) -> Result<Json<PermissionListResponse>, ApiError> {
+    // The context extractor proves organization eligibility; the catalog is
+    // global, every member may read it.
+    let permissions = sqlx::query_as::<_, PermissionPublic>(
+        "SELECT p.key, p.description FROM permissions p ORDER BY p.key",
+    )
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0))?;
+    let _ = context;
+    Ok(Json(PermissionListResponse { data: permissions }))
+}
+
+#[utoipa::path(get,
+    path = "/api/v1/organizations/{organization_id}/roles",
+    params(("organization_id" = Uuid, Path, description = "Organization id")),
+    responses(
+        (status = 200, body = RoleListResponse),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 404, body = crate::error::ErrorEnvelope),
+    )
+)]
+pub async fn list_roles(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    context: crate::context::OrganizationContext,
+) -> Result<Json<RoleListResponse>, ApiError> {
+    let roles = sqlx::query_as::<_, RolePublic>(
+        "SELECT id, name, description, is_system FROM roles          WHERE tenant_id = $1 AND deleted_at IS NULL ORDER BY is_system DESC, name",
+    )
+    .bind(context.organization_id)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0))?;
+    Ok(Json(RoleListResponse { data: roles }))
 }
 
 #[cfg(test)]

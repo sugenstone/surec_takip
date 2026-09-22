@@ -45,6 +45,8 @@ describe('workspace error mapping by stable API code', () => {
     expect(workspaceErrorMessageKey(invalid)).toBe('workspace.error.invalidName');
     const network = new ApiRequestError(0, 'NETWORK_ERROR', 'msg', '');
     expect(workspaceErrorMessageKey(network)).toBe('workspace.error.network');
+    const forbidden = new ApiRequestError(403, 'PERMISSION_DENIED', 'msg', 'id-6');
+    expect(workspaceErrorMessageKey(forbidden)).toBe('workspace.error.forbidden');
     expect(workspaceErrorMessageKey(new Error('x'))).toBe('workspace.error.unexpected');
   });
 });

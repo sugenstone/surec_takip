@@ -6,6 +6,7 @@ pub mod error;
 pub mod migrations;
 pub mod organizations;
 pub mod password;
+pub mod rbac;
 pub mod users;
 pub mod workspaces;
 
@@ -88,6 +89,14 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/v1/organizations/{organization_id}/workspaces",
             post(workspaces::create_workspace).get(workspaces::list_workspaces),
+        )
+        .route(
+            "/api/v1/organizations/{organization_id}/permissions",
+            get(organizations::list_permissions),
+        )
+        .route(
+            "/api/v1/organizations/{organization_id}/roles",
+            get(organizations::list_roles),
         )
         .route(
             "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}",
@@ -176,6 +185,8 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         workspaces::create_workspace,
         workspaces::list_workspaces,
         workspaces::get_workspace,
+        organizations::list_permissions,
+        organizations::list_roles,
     ),
     components(schemas(
         HealthResponse,
@@ -193,6 +204,10 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         workspaces::WorkspacePublic,
         workspaces::WorkspaceMembershipPublic,
         workspaces::WorkspaceListResponse,
+        organizations::PermissionPublic,
+        organizations::PermissionListResponse,
+        organizations::RolePublic,
+        organizations::RoleListResponse,
         auth::LoginRequest,
         auth::LoginResponse,
         auth::LoginData,

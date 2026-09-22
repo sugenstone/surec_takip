@@ -6,7 +6,7 @@ use axum::{
 use serde::Serialize;
 use utoipa::ToSchema;
 
-#[derive(Clone, Copy, Serialize, ToSchema)]
+#[derive(Clone, Copy, Debug, Serialize, ToSchema)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ErrorCode {
     ResourceNotFound,
@@ -14,6 +14,7 @@ pub enum ErrorCode {
     ServiceNotReady,
     AuthRequired,
     AuthInvalidCredentials,
+    PermissionDenied,
     ValidationError,
     InternalError,
 }
@@ -31,6 +32,7 @@ pub struct ErrorEnvelope {
     pub error: ErrorBody,
 }
 
+#[derive(Debug)]
 pub struct ApiError {
     code: ErrorCode,
     status: StatusCode,
@@ -38,6 +40,14 @@ pub struct ApiError {
     details: serde_json::Value,
     request_id: String,
 }
+
+impl std::fmt::Display for ApiError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.message)
+    }
+}
+
+impl std::error::Error for ApiError {}
 
 impl ApiError {
     pub fn new(code: ErrorCode, request_id: String) -> Self {
@@ -51,6 +61,10 @@ impl ApiError {
             ErrorCode::AuthInvalidCredentials => {
                 (StatusCode::UNAUTHORIZED, "Email or password is incorrect.")
             }
+            ErrorCode::PermissionDenied => (
+                StatusCode::FORBIDDEN,
+                "You do not have permission to perform this action.",
+            ),
             ErrorCode::ValidationError => {
                 (StatusCode::UNPROCESSABLE_ENTITY, "Some fields are invalid.")
             }

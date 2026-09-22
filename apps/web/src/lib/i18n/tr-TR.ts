@@ -33,6 +33,7 @@ export const tr = {
   'workspace.error.invalidName': 'Çalışma alanı adı geçersiz.',
   'workspace.error.network': 'Sunucuya ulaşılamadı. Bağlantınızı kontrol edip yeniden deneyin.',
   'workspace.error.unexpected': 'Çalışma alanı oluşturulamadı. Lütfen yeniden deneyin.',
+  'workspace.error.forbidden': 'Bu işlem için yetkiniz yok. Bir yöneticiyle görüşün.',
   'error.notFound.title': 'Sayfa bulunamadı',
   'error.notFound.description': 'Bu adreste bir sayfa bulunmuyor.',
   'error.unexpected.title': 'Bir sorun oluştu',
