@@ -15,3 +15,17 @@ export function loginErrorMessageKey(error: unknown): TranslationKey {
   }
   return 'auth.error.unexpected';
 }
+
+export function organizationErrorMessageKey(error: unknown): TranslationKey {
+  if (error instanceof ApiRequestError) {
+    switch (error.code) {
+      case 'VALIDATION_ERROR':
+        return 'org.error.invalidName';
+      case 'NETWORK_ERROR':
+        return 'org.error.network';
+      default:
+        return 'org.error.unexpected';
+    }
+  }
+  return 'org.error.unexpected';
+}

@@ -3,6 +3,7 @@ pub mod config;
 pub mod database;
 pub mod error;
 pub mod migrations;
+pub mod organizations;
 pub mod password;
 pub mod users;
 
@@ -74,6 +75,14 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/auth/login", post(auth::login))
         .route("/api/v1/auth/logout", post(auth::logout))
         .route("/api/v1/auth/me", get(auth::me))
+        .route(
+            "/api/v1/organizations",
+            post(organizations::create_organization).get(organizations::list_organizations),
+        )
+        .route(
+            "/api/v1/organizations/{organization_id}",
+            get(organizations::get_organization),
+        )
         .fallback(not_found)
         .method_not_allowed_fallback(method_not_allowed)
         .layer(middleware::from_fn(request_context))
@@ -145,11 +154,26 @@ async fn request_context(mut request: Request, next: Next) -> Response {
 
 #[derive(OpenApi)]
 #[openapi(
-    paths(health, ready, auth::login, auth::logout, auth::me),
+    paths(
+        health,
+        ready,
+        auth::login,
+        auth::logout,
+        auth::me,
+        organizations::create_organization,
+        organizations::list_organizations,
+        organizations::get_organization,
+    ),
     components(schemas(
         HealthResponse,
         HealthData,
         HealthStatus,
+        organizations::CreateOrganizationRequest,
+        organizations::CreateOrganizationResponse,
+        organizations::CreateOrganizationData,
+        organizations::OrganizationPublic,
+        organizations::MembershipPublic,
+        organizations::OrganizationListResponse,
         auth::LoginRequest,
         auth::LoginResponse,
         auth::LoginData,

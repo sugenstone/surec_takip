@@ -63,6 +63,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_organizations"];
+        put?: never;
+        post: operations["create_organization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_organization"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ready": {
         parameters: {
             query?: never;
@@ -86,6 +118,17 @@ export interface components {
         AckData: Record<string, never>;
         AckResponse: {
             data: components["schemas"]["AckData"];
+        };
+        CreateOrganizationData: {
+            membership: components["schemas"]["MembershipPublic"];
+            organization: components["schemas"]["OrganizationPublic"];
+        };
+        CreateOrganizationRequest: {
+            name: string;
+            slug?: string | null;
+        };
+        CreateOrganizationResponse: {
+            data: components["schemas"]["CreateOrganizationData"];
         };
         ErrorBody: {
             code: components["schemas"]["ErrorCode"];
@@ -123,11 +166,35 @@ export interface components {
         MeResponse: {
             data: components["schemas"]["MeData"];
         };
+        MembershipPublic: {
+            /** Format: uuid */
+            id: string;
+            joined_at?: string | null;
+            /** Format: uuid */
+            organization_id: string;
+            status: string;
+            /** Format: uuid */
+            user_id: string;
+        };
+        OrganizationListResponse: {
+            data: components["schemas"]["OrganizationPublic"][];
+        };
+        OrganizationPublic: {
+            default_currency?: string | null;
+            default_locale?: string | null;
+            default_timezone: string;
+            /** Format: uuid */
+            id: string;
+            name: string;
+            slug: string;
+            status: string;
+        };
         OrganizationSummary: {
             /** Format: uuid */
             id: string;
             name: string;
             role_summary: string[];
+            slug: string;
         };
         UserPublic: {
             display_name: string;
@@ -262,6 +329,110 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
+                };
+            };
+        };
+    };
+    list_organizations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationListResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    create_organization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateOrganizationRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateOrganizationResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_organization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization id */
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizationPublic"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
         };

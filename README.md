@@ -3,11 +3,12 @@
 Genel amaçlı, multi-tenant iş ve operasyon platformu. Mimari modular monolith;
 PostgreSQL doğruluk kaynağıdır. Varsayılan arayüz dili tr-TR, ikinci dil en.
 
-**Durum:** First Agent Mission 2–6 tamamlandı (Faz 1, hosted CI dahil yeşil).
-Adım 7 olan users/sessions authentication foundation tamamlandı: Argon2id
-login/logout/me, HttpOnly cookie session'lar ve login ekranı çalışıyor.
-Organizations, workspaces, RBAC, tenant context ve domain özellikleri henüz
-uygulanmadı; session yalnızca kimlik doğrular, üyelik yetkisi vermez.
+**Durum:** First Agent Mission 2–6 (Faz 1, hosted CI yeşil) ve adım 7
+users/sessions tamamlandı. Adım 8 organizations + organization memberships
+tamamlandı: atomic organizasyon yaratma, aktif üyelik görünürlüğü,
+üyelik-tabanlı erişim sınırı, `/auth/me` organizasyon listesi ve minimal
+switcher/create UI. Workspaces, tenant middleware, RBAC, invitations ve
+domain özellikleri henüz uygulanmadı.
 
 ## Bağlayıcı belgeler
 
@@ -22,6 +23,7 @@ uygulanmadı; session yalnızca kimlik doğrular, üyelik yetkisi vermez.
 - [Docker/CI doğrulaması](docs/decisions/0003-docker-ci-verification.md)
 - [Users/sessions auth](docs/decisions/0004-users-sessions-auth.md)
 - [Reusable SaaS Starter kararı](docs/decisions/0005-reusable-saas-starter.md)
+- [Organizations/memberships](docs/decisions/0006-organizations-memberships.md)
 
 ## Mevcut yapı
 
@@ -107,6 +109,19 @@ kimlik doğrulama ister; üst barda kullanıcı adı ve çıkış düğmesi gör
 - Hatalar stable code + request_id taşır; DB URL ve hata ayrıntısı açığa çıkmaz.
 - Shutdown Ctrl+C/SIGTERM ile yönetilir.
 
+## Organizations
+
+Kimlik doğrulamış kullanıcı ilk organizasyonunu UI'daki tek alanlı formla
+(`POST /api/v1/organizations`) oluşturur; organizasyon ve yaratıcı üyeliği
+tek transaction'da yazılır. `GET /api/v1/organizations` ve
+`GET /api/v1/organizations/{id}` yalnız kullanıcının aktif üyeliklerinin
+gördüğü organizasyonları döndürür; üye olunmayan/bilinmeyen/silinmiş
+durumlar aynı 404 gövdesiyle reddedilir (existency sızıntısı yok). Slug
+otomatik türetilir veya normalize edilir; alınmış slug 422 "Already taken".
+Header'daki organizasyon seçici yalnız presentation context'idir (cookie);
+backend her istekte üyeliği yeniden doğrular. Slug asla authorization
+sınırı değildir.
+
 ## Dil ve tema foundation
 
 Çeviri anahtarları `apps/web/src/lib/i18n` altında; Svelte metinleri sözlükten
@@ -148,7 +163,9 @@ rol politikası değildir. Production secrets ve deployment bu adımın kapsamı
 ## Migration disiplini
 
 Mevcut migration'lar: `001` citext extension; `002` users + sessions
-(citext UNIQUE email, UNIQUE token_hash digest, expiry CHECK). SQLx
+(citext UNIQUE email, UNIQUE token_hash digest, expiry CHECK); `003`
+organizations + organization_memberships (citext UNIQUE slug, hard
+UNIQUE (tenant_id, user_id) — soft-deleted dahil, bkz. ADR 0006). SQLx
 `_sqlx_migrations` tablosunda version/checksum tutar. Uygulanmış SQL dosyası
 sonradan değiştirilmez; yeni migration eklenir. Dosyalar LF satır sonuyla tutulur.
 
@@ -290,7 +307,7 @@ integration) ve docker (`test:docker` smoke). Faz 1 kapanışında (commit
 
 ## Sonraki aşama
 
-First Agent Mission sırası: organizations/memberships → workspaces/memberships
-→ tenant context middleware → cross-tenant güvenlik testleri (geçmeden
-ilerlenmez) → roles/permissions → minimal app shell → projects. Register/
-invitation akışı organizations fazında sözleşmeyle tanımlanacaktır.
+First Agent Mission sırası: workspaces/memberships → tenant context
+middleware → cross-tenant güvenlik testleri (geçmeden ilerlenmez) →
+roles/permissions → invitations → minimal app shell → starter extraction
+gate değerlendirmesi → projects.

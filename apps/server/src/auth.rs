@@ -1,6 +1,7 @@
 use crate::{
     AppState, RequestId,
     error::{ApiError, ErrorCode},
+    organizations,
     users::{self, AuthenticatedSession, USER_STATUS_ACTIVE, UserRow},
 };
 use argon2::password_hash::rand_core::{OsRng, RngCore};
@@ -100,11 +101,12 @@ impl From<&UserRow> for UserPublic {
     }
 }
 
-// Placeholder for the organizations phase; a session never implies membership.
+// The user's own membership view; role_summary fills in during the RBAC phase.
 #[derive(Serialize, ToSchema)]
 pub struct OrganizationSummary {
     pub id: Uuid,
     pub name: String,
+    pub slug: String,
     pub role_summary: Vec<String>,
 }
 
@@ -303,13 +305,30 @@ pub async fn logout(
         (status = 401, body = crate::error::ErrorEnvelope),
     )
 )]
-pub async fn me(current: CurrentUser) -> Json<MeResponse> {
-    Json(MeResponse {
+pub async fn me(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    current: CurrentUser,
+) -> Result<Json<MeResponse>, ApiError> {
+    // Only organizations the user actively belongs to; foreign organizations
+    // never enter the response (visibility filter in organizations module).
+    let organizations = organizations::visible_for_user(&state.pool, current.user.id)
+        .await
+        .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0))?;
+    Ok(Json(MeResponse {
         data: MeData {
             user: UserPublic::from(&current.user),
-            organizations: Vec::new(),
+            organizations: organizations
+                .into_iter()
+                .map(|organization| OrganizationSummary {
+                    id: organization.id,
+                    name: organization.name,
+                    slug: organization.slug,
+                    role_summary: Vec::new(),
+                })
+                .collect(),
         },
-    })
+    }))
 }
 
 fn insert_cookie(

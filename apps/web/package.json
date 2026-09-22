@@ -7,7 +7,8 @@
     "@sveltejs/adapter-node": "5.5.7",
     "@sveltejs/kit": "2.70.3",
     "svelte": "5.57.1",
-    "@platform/ui": "*"
+    "@platform/ui": "*",
+    "@platform/contracts": "*"
   },
   "scripts": {
     "dev": "vite dev",

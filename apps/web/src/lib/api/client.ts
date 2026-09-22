@@ -1,4 +1,8 @@
 // Clients branch on stable API error codes, never on human-readable messages.
+// All payload types are derived from the generated OpenAPI contract — do not
+// hand-duplicate response shapes here.
+import type { components } from '@platform/contracts/schema';
+
 export type ApiErrorCode =
   | 'AUTH_INVALID_CREDENTIALS'
   | 'AUTH_REQUIRED'
@@ -55,13 +59,10 @@ export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   throw new ApiRequestError(response.status, code, message, requestId);
 }
 
-export interface SessionUser {
-  id: string;
-  email: string;
-  display_name: string;
-  locale: string | null;
-  timezone: string | null;
-}
+export type SessionUser = components['schemas']['UserPublic'];
+export type OrganizationSummary = components['schemas']['OrganizationSummary'];
+export type OrganizationPublic = components['schemas']['OrganizationPublic'];
+export type MeData = components['schemas']['MeData'];
 
 export async function loginRequest(email: string, password: string): Promise<SessionUser> {
   const body = await request<{ data: { user: SessionUser } }>('/api/v1/auth/login', {
@@ -74,4 +75,15 @@ export async function loginRequest(email: string, password: string): Promise<Ses
 
 export async function logoutRequest(): Promise<void> {
   await request<{ data: unknown }>('/api/v1/auth/logout', { method: 'POST' });
+}
+
+export async function createOrganization(name: string): Promise<OrganizationPublic> {
+  const body = await request<{
+    data: { organization: OrganizationPublic };
+  }>('/api/v1/organizations', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  return body.data.organization;
 }

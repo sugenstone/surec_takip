@@ -151,3 +151,37 @@ async fn login_rejects_malformed_and_invalid_bodies_without_echoing_them()
     );
     Ok(())
 }
+
+#[tokio::test]
+async fn organization_endpoints_reject_unauthenticated_requests()
+-> Result<(), Box<dyn std::error::Error>> {
+    let pool = PgPoolOptions::new().connect_lazy("postgres://localhost:1/unavailable")?;
+    let state = test_state(pool);
+    for (uri, method) in [
+        ("/api/v1/organizations", "POST"),
+        ("/api/v1/organizations", "GET"),
+        (
+            "/api/v1/organizations/01a0c5c7-f298-7144-a0f6-96ad1fe99c6f",
+            "GET",
+        ),
+    ] {
+        let response = router(state.clone())
+            .oneshot(
+                Request::builder()
+                    .uri(uri)
+                    .method(method)
+                    .header("content-type", "application/json")
+                    .body(Body::from("{}"))?,
+            )
+            .await?;
+        assert_eq!(
+            response.status(),
+            StatusCode::UNAUTHORIZED,
+            "{method} {uri}"
+        );
+        let bytes = to_bytes(response.into_body(), 4096).await?;
+        let body: serde_json::Value = serde_json::from_slice(&bytes)?;
+        assert_eq!(body["error"]["code"], "AUTH_REQUIRED", "{method} {uri}");
+    }
+    Ok(())
+}

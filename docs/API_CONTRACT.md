@@ -194,6 +194,24 @@ GET  /organizations/{organization_id}/workspaces/{workspace_id}
 PATCH /organizations/{organization_id}/workspaces/{workspace_id}
 ```
 
+Implementation status (organizations foundation): `POST /organizations`,
+`GET /organizations` and `GET /organizations/{organization_id}` are
+implemented. Creation is authenticated and atomic: the organization and the
+creator membership commit in one transaction (201 returns organization +
+membership). `name` (1–200 chars) is required; optional `slug` is normalized
+to `[a-z0-9-]` with Turkish transliteration — an unusable slug is a 422 field
+error, a taken slug (case-insensitive citext UNIQUE) returns 422
+`VALIDATION_ERROR` with `details.fields.slug = ["Already taken"]`. Slugs are
+public identifiers, never authorization boundaries; authorization uses the
+immutable organization id. List and single-get return only organizations
+where the caller has an active, non-deleted membership joined to a
+non-deleted organization. Non-member, unknown id, malformed id, deleted
+membership and deleted organization all return the same 404
+`RESOURCE_NOT_FOUND` (no existence leak). `PATCH`, workspaces and member
+management remain unimplemented until their phases. `GET /auth/me`
+`organizations` now carries the caller's visible organizations
+(id/name/slug, empty `role_summary` until RBAC).
+
 # 6. Invitations and memberships
 
 ``` text

@@ -110,6 +110,13 @@ deleted_at timestamptz NULL
 UNIQUE (tenant_id, user_id)
 ```
 
+Membership `status` values are `active` and `deleted` (soft delete). The
+UNIQUE constraint is intentionally hard rather than partial: at most one
+membership row per (tenant, user) ever exists, including soft-deleted rows;
+rejoining reactivates the same row instead of inserting a duplicate, which
+makes duplicate active memberships impossible under concurrency. Deleted
+memberships and deleted organizations never grant visibility.
+
 ### workspaces
 
 ``` text

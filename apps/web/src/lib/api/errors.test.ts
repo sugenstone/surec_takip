@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiRequestError } from './client';
-import { loginErrorMessageKey } from './errors';
+import { loginErrorMessageKey, organizationErrorMessageKey } from './errors';
+import { validOrganizationName } from '../org';
 
 describe('login error mapping by stable API code', () => {
   it('maps credential, network and unknown codes to distinct translation keys', () => {
@@ -21,5 +22,28 @@ describe('login error mapping by stable API code', () => {
       'id-3',
     );
     expect(loginErrorMessageKey(misleading)).not.toContain('incorrect');
+  });
+});
+
+describe('organization error mapping by stable API code', () => {
+  it('maps validation, network and unknown codes to distinct translation keys', () => {
+    const invalid = new ApiRequestError(422, 'VALIDATION_ERROR', 'msg', 'id-4');
+    expect(organizationErrorMessageKey(invalid)).toBe('org.error.invalidName');
+    const network = new ApiRequestError(0, 'NETWORK_ERROR', 'msg', '');
+    expect(organizationErrorMessageKey(network)).toBe('org.error.network');
+    expect(organizationErrorMessageKey(new Error('x'))).toBe('org.error.unexpected');
+  });
+});
+
+describe('organization name validation', () => {
+  it('accepts trimmed names of 1 to 200 characters', () => {
+    expect(validOrganizationName('Acme')).toBe(true);
+    expect(validOrganizationName('  Acme  ')).toBe(true);
+    expect(validOrganizationName('a'.repeat(200))).toBe(true);
+  });
+  it('rejects empty, whitespace-only and oversized names', () => {
+    expect(validOrganizationName('')).toBe(false);
+    expect(validOrganizationName('   ')).toBe(false);
+    expect(validOrganizationName('a'.repeat(201))).toBe(false);
   });
 });
