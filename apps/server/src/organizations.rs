@@ -6,7 +6,7 @@ use crate::{
 };
 use axum::{
     Extension, Json,
-    extract::{Path, State},
+    extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -48,7 +48,7 @@ impl std::fmt::Display for OrganizationError {
 
 impl std::error::Error for OrganizationError {}
 
-#[derive(sqlx::FromRow)]
+#[derive(Clone, sqlx::FromRow)]
 pub struct OrganizationRow {
     pub id: Uuid,
     pub name: String,
@@ -423,21 +423,11 @@ pub async fn list_organizations(
     )
 )]
 pub async fn get_organization(
-    State(state): State<AppState>,
-    Extension(request_id): Extension<RequestId>,
-    current: CurrentUser,
-    Path(raw): Path<String>,
+    context: crate::context::OrganizationContext,
 ) -> Result<Json<OrganizationPublic>, ApiError> {
-    // Malformed ids resolve exactly like unknown ones: one indistinguishable
-    // 404 instead of a distinct error that could aid enumeration.
-    let Ok(organization_id) = raw.parse::<Uuid>() else {
-        return Err(ApiError::new(ErrorCode::ResourceNotFound, request_id.0));
-    };
-    match find_for_member(&state.pool, organization_id, current.user.id).await {
-        Ok(Some(organization)) => Ok(Json(OrganizationPublic::from(organization))),
-        Ok(None) => Err(ApiError::new(ErrorCode::ResourceNotFound, request_id.0)),
-        Err(_) => Err(ApiError::new(ErrorCode::InternalError, request_id.0)),
-    }
+    // Authentication, membership and malformed/unknown-id semantics are all
+    // resolved by the OrganizationContext extractor (single boundary).
+    Ok(Json(OrganizationPublic::from(context.organization)))
 }
 
 #[cfg(test)]

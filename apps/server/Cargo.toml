@@ -44,3 +44,7 @@ required-features = ["integration"]
 [[test]]
 name = "workspaces"
 required-features = ["integration"]
+
+[[test]]
+name = "context"
+required-features = ["integration"]

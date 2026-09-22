@@ -77,6 +77,42 @@ milestone'un dışındadır.
    anlamlarını gevşetmemeli; handler'lara kopyalanmış alternatif erişim
    sorgusu eklenmemelidir.
 
+## Tenant request context (adım 10, bağlayıcı)
+
+Step 10, tenant resolution'ı reusable typed Axum extractor'lara taşıdı:
+`context::OrganizationContext` (org-scoped route'lar) ve
+`context::WorkspaceContext` (workspace-scoped route'lar). Durable ilkeler:
+
+1. **Context, DB'den türetilir — cookie'den asla:** "Resolved request context
+   is authorization/scoping state derived from authenticated user +
+   database relationships, never from UX cookies." Extractor'lar yalnız
+   session cookie + route ID'leri + membership sorgularını okur;
+   organization/workspace UX cookie'lerini hiçbir modül okumaz (test:
+   `manipulated_context_cookies_never_change_tenant_resolution`).
+   Resolution sırası: authentication (401) → route ID parse (malformed ==
+   unknown) → membership (404).
+2. **Context, transactional invariant'ın yerine geçmez:** "Context
+   validation does not replace transactional invariant checks for
+   security-sensitive mutations." `create_with_membership` organization
+   membership doğrulamasını transaction **içinde** korur (TOCTOU).
+3. **Route identity isim ile extraction:** extractor'lar `OrganizationRoute`
+   / `WorkspaceRoute` isimli struct'larıyla path parametrelerini alan adından
+   çözer; fazladan path parametreleri yok sayılır — gelecekteki derin
+   nested route'larda (`.../workspaces/{w}/projects/{p}`) güvenle yeniden
+   kullanılabilir (pin testi:
+   `named_path_struct_extraction_ignores_extra_route_parameters`).
+   Tuple/String extraction arity'ye bağlı olduğundan kullanılmaz.
+
+Extractors'lar davranışı değiştirmez: aynı source-of-truth fonksiyonlar
+(`find_for_member`, `find_accessible`/`visible_for_user` + ACCESS_FILTER);
+handler'larda alternatif authorization query'si kalmadı. Workspace
+gerektirmeyen route'a fake/default workspace context üretilmez; `POST
+.../workspaces` organization-scoped'tur. Context'ler future RBAC için
+identity/scoping taşır (user, tenant=organization, workspace);
+role/permission barındırmaz. tenant_id ve organization_id aynı
+server-resolved organization identity'sinden türetilen bilinçli semantic
+alias'tır.
+
 ## Enumeration semantiği
 
 Foreign org, foreign workspace, mismatched parent-child, rastgele UUID,

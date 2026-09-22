@@ -225,3 +225,48 @@ async fn workspace_endpoints_reject_unauthenticated_requests()
     }
     Ok(())
 }
+
+// Pins the real axum path-extraction contract our context extractors rely on
+// (apps/server/src/context.rs): struct extraction is by FIELD NAME and
+// ignores extra path parameters, so OrganizationContext/WorkspaceContext stay
+// reusable on future deeper routes (e.g. .../workspaces/{w}/projects/{p}).
+// Tuple or plain-String extraction would reject any route whose total
+// parameter count differs.
+#[tokio::test]
+async fn named_path_struct_extraction_ignores_extra_route_parameters()
+-> Result<(), Box<dyn std::error::Error>> {
+    #[derive(serde::Deserialize)]
+    struct WorkspaceRoute {
+        organization_id: String,
+        workspace_id: String,
+    }
+    async fn deep_handler(
+        axum::extract::Path(route): axum::extract::Path<WorkspaceRoute>,
+    ) -> axum::Json<serde_json::Value> {
+        axum::Json(serde_json::json!({
+            "organization_id": route.organization_id,
+            "workspace_id": route.workspace_id,
+        }))
+    }
+    let router = axum::Router::new().route(
+        "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}",
+        axum::routing::get(deep_handler),
+    );
+    let response = router
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/organizations/org-1/workspaces/ws-1/projects/prj-1")
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "struct extraction must succeed on a three-parameter route"
+    );
+    let bytes = to_bytes(response.into_body(), 4096).await?;
+    let body: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(body["organization_id"], "org-1");
+    assert_eq!(body["workspace_id"], "ws-1");
+    Ok(())
+}

@@ -172,6 +172,28 @@ pub struct CurrentUser {
     pub user: UserRow,
 }
 
+// Shared session resolution: CurrentUser and the tenant context extractors
+// resolve authentication through this single path so the 401-before-404
+// order is identical everywhere.
+pub(crate) async fn resolve_current_user(
+    parts: &mut axum::http::request::Parts,
+    state: &AppState,
+) -> Result<CurrentUser, ApiError> {
+    let request_id = parts
+        .extensions
+        .get::<RequestId>()
+        .map(|id| id.0.clone())
+        .unwrap_or_default();
+    let Some(token) = cookie_value(&parts.headers, SESSION_COOKIE) else {
+        return Err(ApiError::new(ErrorCode::AuthRequired, request_id));
+    };
+    match users::find_active_session(&state.pool, &digest_token(&token)).await {
+        Ok(Some(AuthenticatedSession { session_id, user })) => Ok(CurrentUser { session_id, user }),
+        Ok(None) => Err(ApiError::new(ErrorCode::AuthRequired, request_id)),
+        Err(_) => Err(ApiError::new(ErrorCode::InternalError, request_id)),
+    }
+}
+
 impl FromRequestParts<AppState> for CurrentUser {
     type Rejection = ApiError;
 
@@ -179,21 +201,7 @@ impl FromRequestParts<AppState> for CurrentUser {
         parts: &mut axum::http::request::Parts,
         state: &AppState,
     ) -> Result<Self, Self::Rejection> {
-        let request_id = parts
-            .extensions
-            .get::<RequestId>()
-            .map(|id| id.0.clone())
-            .unwrap_or_default();
-        let Some(token) = cookie_value(&parts.headers, SESSION_COOKIE) else {
-            return Err(ApiError::new(ErrorCode::AuthRequired, request_id));
-        };
-        match users::find_active_session(&state.pool, &digest_token(&token)).await {
-            Ok(Some(AuthenticatedSession { session_id, user })) => {
-                Ok(CurrentUser { session_id, user })
-            }
-            Ok(None) => Err(ApiError::new(ErrorCode::AuthRequired, request_id)),
-            Err(_) => Err(ApiError::new(ErrorCode::InternalError, request_id)),
-        }
+        resolve_current_user(parts, state).await
     }
 }
 

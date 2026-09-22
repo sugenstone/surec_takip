@@ -1,12 +1,12 @@
 use crate::{
     AppState, RequestId,
-    auth::{ApiJson, CurrentUser},
+    auth::ApiJson,
     error::{ApiError, ErrorCode},
     organizations::{self, slug_from_text, validate_slug},
 };
 use axum::{
     Extension, Json,
-    extract::{Path, State},
+    extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
@@ -48,7 +48,7 @@ impl std::fmt::Display for WorkspaceError {
 
 impl std::error::Error for WorkspaceError {}
 
-#[derive(sqlx::FromRow)]
+#[derive(Clone, sqlx::FromRow)]
 pub struct WorkspaceRow {
     pub id: Uuid,
     pub organization_id: Uuid,
@@ -277,11 +277,6 @@ pub struct WorkspaceListResponse {
 // Handlers
 // ---------------------------------------------------------------------------
 
-fn parse_id(raw: &str) -> Result<Uuid, ApiError> {
-    raw.parse::<Uuid>()
-        .map_err(|_| ApiError::new(ErrorCode::ResourceNotFound, String::new()))
-}
-
 #[utoipa::path(post,
     path = "/api/v1/organizations/{organization_id}/workspaces",
     request_body = CreateWorkspaceRequest,
@@ -296,12 +291,15 @@ fn parse_id(raw: &str) -> Result<Uuid, ApiError> {
 pub async fn create_workspace(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
-    current: CurrentUser,
-    Path(organization_id): Path<String>,
+    context: crate::context::OrganizationContext,
     ApiJson(body): ApiJson<CreateWorkspaceRequest>,
 ) -> Result<Response, ApiError> {
+    // The route is organization-scoped: the workspace does not exist yet, so
+    // only OrganizationContext applies. create_with_membership re-validates
+    // the organization membership inside the transaction (TOCTOU, ADR 0007).
     let not_found = || ApiError::new(ErrorCode::ResourceNotFound, request_id.0.clone());
-    let organization_id = parse_id(&organization_id).map_err(|_| not_found())?;
+    let organization_id = context.organization_id;
+    let creator = context.user_id;
     let name = body.name.trim().to_owned();
     let mut fields = serde_json::Map::new();
     if name.is_empty() {
@@ -338,7 +336,7 @@ pub async fn create_workspace(
         &state.pool,
         organization_id,
         &NewWorkspace { name, slug },
-        current.user.id,
+        creator,
     )
     .await;
     match result {
@@ -375,20 +373,9 @@ pub async fn create_workspace(
 pub async fn list_workspaces(
     State(state): State<AppState>,
     Extension(request_id): Extension<RequestId>,
-    current: CurrentUser,
-    Path(organization_id): Path<String>,
+    context: crate::context::OrganizationContext,
 ) -> Result<Json<WorkspaceListResponse>, ApiError> {
-    let organization_id = parse_id(&organization_id)
-        .map_err(|_| ApiError::new(ErrorCode::ResourceNotFound, request_id.0.clone()))?;
-    // Organization membership is required before any workspace is listed;
-    // foreign or unknown organizations behave exactly like not found.
-    let member = organizations::find_for_member(&state.pool, organization_id, current.user.id)
-        .await
-        .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0.clone()))?;
-    if member.is_none() {
-        return Err(ApiError::new(ErrorCode::ResourceNotFound, request_id.0));
-    }
-    let workspaces = visible_for_user(&state.pool, organization_id, current.user.id)
+    let workspaces = visible_for_user(&state.pool, context.organization_id, context.user_id)
         .await
         .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0))?;
     Ok(Json(WorkspaceListResponse {
@@ -409,19 +396,9 @@ pub async fn list_workspaces(
     )
 )]
 pub async fn get_workspace(
-    State(state): State<AppState>,
-    Extension(request_id): Extension<RequestId>,
-    current: CurrentUser,
-    Path((organization_id, workspace_id)): Path<(String, String)>,
+    context: crate::context::WorkspaceContext,
 ) -> Result<Json<WorkspacePublic>, ApiError> {
-    let not_found = || ApiError::new(ErrorCode::ResourceNotFound, request_id.0.clone());
-    let organization_id = parse_id(&organization_id).map_err(|_| not_found())?;
-    // Malformed ids resolve exactly like unknown ones: one indistinguishable
-    // 404 instead of a distinct error that could aid enumeration.
-    let workspace_id = parse_id(&workspace_id).map_err(|_| not_found())?;
-    match find_accessible(&state.pool, organization_id, workspace_id, current.user.id).await {
-        Ok(Some(workspace)) => Ok(Json(WorkspacePublic::from(workspace))),
-        Ok(None) => Err(not_found()),
-        Err(_) => Err(ApiError::new(ErrorCode::InternalError, request_id.0)),
-    }
+    // The full step 9 access invariant (both memberships, parent-child
+    // authority, visibility) is resolved by the WorkspaceContext extractor.
+    Ok(Json(WorkspacePublic::from(context.workspace)))
 }
