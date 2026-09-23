@@ -228,6 +228,61 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/effective-permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Effective workspace-scope permission keys for the authenticated user:
+         *     organization-wide grants (workspace_id IS NULL at organization scope)
+         *     plus grants bound to this workspace. Mirrors the authorize_workspace
+         *     join semantics so workspace-scoped project roles surface correctly.
+         *     Frontend uses this for action visibility only (ADR 0011).
+         */
+        get: operations["effective_workspace_permissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_projects"];
+        put?: never;
+        post: operations["create_project_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_project"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["update_project_handler"];
+        trace?: never;
+    };
     "/api/v1/ready": {
         parameters: {
             query?: never;
@@ -292,6 +347,11 @@ export interface components {
         };
         CreateOrganizationResponse: {
             data: components["schemas"]["CreateOrganizationData"];
+        };
+        CreateProjectRequest: {
+            description?: string | null;
+            name: string;
+            slug?: string | null;
         };
         CreateWorkspaceData: {
             membership: components["schemas"]["WorkspaceMembershipPublic"];
@@ -399,6 +459,24 @@ export interface components {
             description: string;
             key: string;
         };
+        ProjectListResponse: {
+            data: components["schemas"]["ProjectPublic"][];
+        };
+        ProjectMutationResponse: {
+            data: components["schemas"]["ProjectPublic"];
+        };
+        ProjectPublic: {
+            description?: string | null;
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: uuid */
+            organization_id: string;
+            slug: string;
+            status: string;
+            /** Format: uuid */
+            workspace_id: string;
+        };
         RoleListResponse: {
             data: components["schemas"]["RolePublic"][];
         };
@@ -408,6 +486,18 @@ export interface components {
             id: string;
             is_system: boolean;
             name: string;
+        };
+        /**
+         * @description Ownership (tenant/workspace) and lifecycle authority never enter the body:
+         *     scope comes from the authenticated session plus the route, and new
+         *     projects always start `active` (ADR 0011).
+         */
+        UpdateProjectRequest: {
+            /** @description Empty string clears the stored description. */
+            description?: string | null;
+            name?: string | null;
+            slug?: string | null;
+            status?: string | null;
         };
         UserPublic: {
             display_name: string;
@@ -1096,6 +1186,250 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    effective_workspace_permissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent organization id */
+                organization_id: string;
+                /** @description Workspace id */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectivePermissionsResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_projects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent organization id */
+                organization_id: string;
+                /** @description Parent workspace id */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectListResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    create_project_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent organization id */
+                organization_id: string;
+                /** @description Parent workspace id */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProjectRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectMutationResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_project: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent organization id */
+                organization_id: string;
+                /** @description Parent workspace id */
+                workspace_id: string;
+                /** @description Project id */
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectPublic"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    update_project_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent organization id */
+                organization_id: string;
+                /** @description Parent workspace id */
+                workspace_id: string;
+                /** @description Project id */
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProjectRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectMutationResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

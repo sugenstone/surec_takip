@@ -10,6 +10,7 @@ use crate::{
     AppState, auth,
     error::{ApiError, ErrorCode},
     organizations::{self, OrganizationRow},
+    projects::{self, ProjectRow},
     workspaces::{self, WorkspaceRow},
 };
 use axum::extract::{FromRequestParts, Path};
@@ -30,6 +31,13 @@ struct OrganizationRoute {
 struct WorkspaceRoute {
     organization_id: String,
     workspace_id: String,
+}
+
+#[derive(Deserialize)]
+struct ProjectRoute {
+    organization_id: String,
+    workspace_id: String,
+    project_id: String,
 }
 
 /// Organization-scoped tenant context.
@@ -152,6 +160,83 @@ impl FromRequestParts<AppState> for WorkspaceContext {
                 ErrorCode::InternalError,
                 request_id_of(parts),
             )),
+        }
+    }
+}
+
+/// Project-scoped tenant context (step 17, ADR 0011). Only constructible
+/// when the full parent chain holds: the WorkspaceContext invariant AND the
+/// project belonging to the resolved workspace/tenant AND not soft-deleted.
+/// The route parent chain is authoritative — a project id alone never
+/// resolves anything, so wrong-parent combinations are uniform 404s.
+///
+/// This resolves request ELIGIBILITY only; mutations must re-prove
+/// memberships and permission inside their transaction.
+#[derive(Clone)]
+pub struct ProjectContext {
+    pub user_id: Uuid,
+    pub tenant_id: Uuid,
+    pub organization_id: Uuid,
+    pub workspace_id: Uuid,
+    pub project_id: Uuid,
+    pub project: ProjectRow,
+}
+
+impl FromRequestParts<AppState> for ProjectContext {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let current = auth::resolve_current_user(parts, state).await?;
+        let path = Path::<ProjectRoute>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| not_found(parts))?;
+        let ProjectRoute {
+            organization_id: raw_organization,
+            workspace_id: raw_workspace,
+            project_id: raw_project,
+        } = path.0;
+        let not_found = || not_found(parts);
+        // Malformed ids resolve exactly like unknown ones.
+        let Ok(organization_id) = raw_organization.parse::<Uuid>() else {
+            return Err(not_found());
+        };
+        let Ok(workspace_id) = raw_workspace.parse::<Uuid>() else {
+            return Err(not_found());
+        };
+        let Ok(project_id) = raw_project.parse::<Uuid>() else {
+            return Err(not_found());
+        };
+        // Parent authority and both memberships first (same authoritative
+        // query as WorkspaceContext), then the project scoped to the resolved
+        // parent pair in one query — no separate "then check tenant" step.
+        let workspace = workspaces::find_accessible(
+            &state.pool,
+            organization_id,
+            workspace_id,
+            current.user.id,
+        )
+        .await
+        .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id_of(parts)))?;
+        let Some(workspace) = workspace else {
+            return Err(not_found());
+        };
+        let project =
+            projects::find_accessible(&state.pool, organization_id, workspace_id, project_id)
+                .await
+                .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id_of(parts)))?;
+        match project {
+            Some(project) => Ok(ProjectContext {
+                user_id: current.user.id,
+                tenant_id: workspace.organization_id,
+                organization_id: workspace.organization_id,
+                workspace_id: workspace.id,
+                project_id: project.id,
+                project,
+            }),
+            None => Err(not_found()),
         }
     }
 }

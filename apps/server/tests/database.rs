@@ -51,14 +51,22 @@ async fn migration_can_revert_and_reapply_on_disposable_database(
     pool: PgPool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     migrations::revert_last(&pool).await?;
-    let invitations_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'invitations')",
+    let projects_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'projects')",
     )
     .fetch_one(&pool)
     .await?;
     assert!(
-        !invitations_exists,
-        "revert must remove the invitations migration"
+        !projects_exists,
+        "revert must remove the projects migration"
+    );
+    let project_permissions: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM permissions WHERE key LIKE 'projects:%'")
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(
+        project_permissions, 0,
+        "revert must remove the project permission catalog rows"
     );
     let organizations_exists: bool = sqlx::query_scalar(
         "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'organizations')",
@@ -89,13 +97,11 @@ async fn changed_migration_checksum_is_rejected(
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn revert_preserves_dependent_data(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
-    // A dependent object on roles must block rollback instead of being
+    // A dependent object on projects must block rollback instead of being
     // dropped.
-    sqlx::query(
-        "CREATE TABLE migration_safety_probe (invitation_id uuid REFERENCES invitations (id))",
-    )
-    .execute(&pool)
-    .await?;
+    sqlx::query("CREATE TABLE migration_safety_probe (project_id uuid REFERENCES projects (id))")
+        .execute(&pool)
+        .await?;
     assert!(migrations::revert_last(&pool).await.is_err());
     migrations::verify(&pool).await?;
     let _: i64 = sqlx::query_scalar("SELECT count(*) FROM migration_safety_probe")

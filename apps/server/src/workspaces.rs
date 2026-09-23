@@ -200,8 +200,10 @@ pub async fn visible_for_user(
 /// Single-workspace access check. The workspace must belong to the requested
 /// parent organization (w.tenant_id = organization_id), and both memberships
 /// must be valid. Every miss returns None for indistinguishable 404s.
+/// Accepts any executor so project mutations can re-run the same check on
+/// their transaction snapshot (ADR 0011).
 pub async fn find_accessible(
-    pool: &PgPool,
+    executor: impl sqlx::Executor<'_, Database = sqlx::Postgres>,
     organization_id: Uuid,
     workspace_id: Uuid,
     user_id: Uuid,
@@ -218,7 +220,7 @@ pub async fn find_accessible(
         .bind(workspace_id)
         .bind(organization_id)
         .bind(user_id)
-        .fetch_optional(pool)
+        .fetch_optional(executor)
         .await
         .map_err(|_| WorkspaceError::DatabaseError)
 }

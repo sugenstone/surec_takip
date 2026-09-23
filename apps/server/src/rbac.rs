@@ -49,8 +49,15 @@ pub async fn bootstrap_builtin_roles(
     .map_err(|_| ApiError::new(ErrorCode::InternalError, String::new()))?;
     // Grants reference the permission catalog by stable key. Extending the
     // grant list is a deliberate bootstrap decision, never automatic flow
-    // (ADR 0008: Owner does not implicitly gain future permissions).
-    for key in [WORKSPACES_CREATE.0, crate::invitations::MEMBERS_INVITE.0] {
+    // (ADR 0008: Owner does not implicitly gain future permissions). The
+    // project keys mirror the 007_projects migration backfill (ADR 0011).
+    for key in [
+        WORKSPACES_CREATE.0,
+        crate::invitations::MEMBERS_INVITE.0,
+        crate::projects::PROJECTS_CREATE.0,
+        crate::projects::PROJECTS_UPDATE.0,
+        crate::projects::PROJECTS_ARCHIVE.0,
+    ] {
         sqlx::query(
             "INSERT INTO role_permissions (role_id, permission_id, scope) \
              SELECT $1, p.id, 'organization' FROM permissions p WHERE p.key = $2",
@@ -138,6 +145,42 @@ pub async fn authorize_workspace(
     .bind(workspace_id)
     .bind(permission.0)
     .fetch_one(pool)
+    .await
+    .map_err(|_| ApiError::new(ErrorCode::InternalError, String::new()))?;
+    Ok(granted)
+}
+
+/// Transactional workspace-scope re-validation for security-critical
+/// mutations: the same evaluation as `authorize_workspace`, executed inside
+/// the mutation transaction so a revocation racing the write cannot slip
+/// through (TOCTOU, ADR 0008/0011).
+pub async fn authorize_workspace_in_tx(
+    transaction: &mut PgConnection,
+    tenant_id: Uuid,
+    workspace_id: Uuid,
+    user_id: Uuid,
+    permission: PermissionKey,
+) -> Result<bool, ApiError> {
+    let granted = sqlx::query_scalar::<_, bool>(
+        "SELECT EXISTS( \
+            SELECT 1 FROM membership_roles mr \
+            JOIN roles r ON r.id = mr.role_id AND r.tenant_id = mr.tenant_id AND r.deleted_at IS NULL \
+            JOIN role_permissions rp ON rp.role_id = r.id \
+                 AND ((mr.workspace_id IS NULL AND rp.scope = 'organization') \
+                   OR (mr.workspace_id = $3 AND rp.scope = 'workspace')) \
+            JOIN permissions p ON p.id = rp.permission_id AND p.key = $4 \
+            JOIN organization_memberships om ON om.tenant_id = mr.tenant_id AND om.user_id = mr.user_id \
+                 AND om.status = 'active' AND om.deleted_at IS NULL \
+            JOIN workspace_memberships wsm ON wsm.workspace_id = $3 AND wsm.user_id = mr.user_id \
+                 AND wsm.status = 'active' AND wsm.deleted_at IS NULL \
+            WHERE mr.tenant_id = $1 AND mr.user_id = $2 \
+              AND (mr.workspace_id IS NULL OR mr.workspace_id = $3))",
+    )
+    .bind(tenant_id)
+    .bind(user_id)
+    .bind(workspace_id)
+    .bind(permission.0)
+    .fetch_one(&mut *transaction)
     .await
     .map_err(|_| ApiError::new(ErrorCode::InternalError, String::new()))?;
     Ok(granted)

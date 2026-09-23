@@ -45,3 +45,26 @@ export function workspaceErrorMessageKey(error: unknown): TranslationKey {
   }
   return 'workspace.error.unexpected';
 }
+
+// Project mutations distinguish field-level validation failures (name, slug
+// conflict, invalid transition) from permission and connectivity problems
+// using the stable VALIDATION_ERROR code plus the details.fields payload.
+export function projectErrorMessageKey(error: unknown): TranslationKey {
+  if (error instanceof ApiRequestError) {
+    switch (error.code) {
+      case 'VALIDATION_ERROR': {
+        const fields = (error.details as { fields?: Record<string, unknown> } | undefined)?.fields;
+        if (fields && 'status' in fields) return 'projects.error.invalidTransition';
+        if (fields && 'slug' in fields) return 'projects.error.slugTaken';
+        return 'projects.error.invalidName';
+      }
+      case 'PERMISSION_DENIED':
+        return 'projects.error.forbidden';
+      case 'NETWORK_ERROR':
+        return 'projects.error.network';
+      default:
+        return 'projects.error.unexpected';
+    }
+  }
+  return 'projects.error.unexpected';
+}

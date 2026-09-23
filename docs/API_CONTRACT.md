@@ -308,16 +308,34 @@ built-in role names are stable identifiers, not translations.
 
 # 9. Projects
 
+Implemented V1 surface (ADR 0011):
+
 ``` text
 GET    /organizations/{org}/workspaces/{ws}/projects
 POST   /organizations/{org}/workspaces/{ws}/projects
 GET    /organizations/{org}/workspaces/{ws}/projects/{project_id}
 PATCH  /organizations/{org}/workspaces/{ws}/projects/{project_id}
+```
+
+- Reads are eligibility-based (active org + workspace membership); V1 has no
+  `projects:read`.
+- Mutations: `projects:create` (POST), `projects:update` (PATCH), and
+  `projects:archive` additionally when a PATCH sets `status: "archived"`.
+- Status lifecycle: `active | completed | archived`; allowed transitions
+  active→completed, active→archived, completed→active, completed→archived,
+  archived→active (+ identity). `archived → completed` is rejected.
+- Slug conflicts map to `VALIDATION_ERROR` with `details.fields.slug`.
+- `DELETE` and `/restore` are deferred until product semantics are defined;
+  `deleted_at` is schema infrastructure only.
+
+Planned later (documented shape, not yet implemented):
+
+``` text
 DELETE /organizations/{org}/workspaces/{ws}/projects/{project_id}
 POST   /organizations/{org}/workspaces/{ws}/projects/{project_id}/restore
 ```
 
-List filters may include:
+List filters may include (later phases):
 
 ``` text
 status
@@ -1051,10 +1069,11 @@ Every endpoint maps to explicit permissions.
 Examples:
 
 ``` text
-GET projects            projects:view
+GET projects            (eligibility: active memberships; V1 has no read key)
 POST projects           projects:create
 PATCH project           projects:update
-DELETE project          projects:delete
+PATCH project -> archived   projects:update + projects:archive
+DELETE project          projects:delete (deferred; not yet implemented)
 
 POST step/start         tasks:start
 POST step/pause         tasks:pause

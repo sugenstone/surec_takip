@@ -51,10 +51,12 @@ async function playwright() {
 
 try {
   await compose('up', '--build', '--detach', '--wait', '--wait-timeout', '180', 'db', 'server');
-  // Two users let organization- and workspace-specs keep isolated fixtures.
+  // Distinct users keep spec fixtures isolated from each other: auth/shell
+  // (e2e), projects owner (e2e2) and the invited permission-less member (e2e3).
   for (const [email, displayName] of [
     ['e2e@example.test', 'E2e User'],
     ['e2e2@example.test', 'E2e User Two'],
+    ['e2e3@example.test', 'E2e User Three'],
   ]) {
     await compose(
       'run',

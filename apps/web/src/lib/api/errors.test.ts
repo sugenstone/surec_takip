@@ -3,6 +3,7 @@ import { ApiRequestError } from './client';
 import {
   loginErrorMessageKey,
   organizationErrorMessageKey,
+  projectErrorMessageKey,
   workspaceErrorMessageKey,
 } from './errors';
 import { validOrganizationName, validWorkspaceName } from '../org';
@@ -56,6 +57,33 @@ describe('workspace name validation', () => {
     expect(validWorkspaceName('Atölye')).toBe(true);
     expect(validWorkspaceName('   ')).toBe(false);
     expect(validWorkspaceName('a'.repeat(201))).toBe(false);
+  });
+});
+
+describe('project error mapping by stable API code and field payload', () => {
+  it('splits VALIDATION_ERROR into transition, slug and name messages', () => {
+    const transition = new ApiRequestError(422, 'VALIDATION_ERROR', 'msg', 'id-7', {
+      fields: { status: ['Invalid transition'] },
+    });
+    expect(projectErrorMessageKey(transition)).toBe('projects.error.invalidTransition');
+    const slug = new ApiRequestError(422, 'VALIDATION_ERROR', 'msg', 'id-8', {
+      fields: { slug: ['Already taken'] },
+    });
+    expect(projectErrorMessageKey(slug)).toBe('projects.error.slugTaken');
+    const name = new ApiRequestError(422, 'VALIDATION_ERROR', 'msg', 'id-9', {
+      fields: { name: ['Required'] },
+    });
+    expect(projectErrorMessageKey(name)).toBe('projects.error.invalidName');
+  });
+
+  it('maps permission, network and unknown failures without reading messages', () => {
+    const forbidden = new ApiRequestError(403, 'PERMISSION_DENIED', 'msg', 'id-10');
+    expect(projectErrorMessageKey(forbidden)).toBe('projects.error.forbidden');
+    const network = new ApiRequestError(0, 'NETWORK_ERROR', 'msg', '');
+    expect(projectErrorMessageKey(network)).toBe('projects.error.network');
+    const other = new ApiRequestError(500, 'INTERNAL_ERROR', 'msg', 'id-11');
+    expect(projectErrorMessageKey(other)).toBe('projects.error.unexpected');
+    expect(projectErrorMessageKey(new Error('x'))).toBe('projects.error.unexpected');
   });
 });
 

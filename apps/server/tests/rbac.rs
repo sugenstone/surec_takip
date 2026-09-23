@@ -189,8 +189,8 @@ async fn organization_creation_bootstraps_owner_atomically(
     .fetch_one(&pool)
     .await?;
     assert_eq!(
-        grants, 2,
-        "owner grants workspaces:create + members:invite at org scope"
+        grants, 5,
+        "owner grants workspaces:create + members:invite + projects:create/update/archive at org scope"
     );
     let assignments: i64 =
         sqlx::query_scalar("SELECT count(*) FROM membership_roles WHERE tenant_id = $1")
@@ -556,14 +556,20 @@ async fn pre_rbac_organizations_get_no_automatic_owner_but_support_explicit_boot
     // organization with two members — the LATE joiner being the hypothetical
     // real administrator — then re-apply. Historical order in test data is
     // arbitrary by design: the migration must NOT guess.
-    // Revert directly to the pre-RBAC version (revert_last verifies full
-    // history first, so it cannot be called twice in a row).
-    let target = MIGRATOR
+    // Revert directly to the last pre-RBAC version, located BY NAME so later
+    // migrations (e.g. 007_projects) cannot shift a hardcoded position
+    // (revert_last verifies full history first, so it cannot be called twice
+    // in a row).
+    let up_migrations: Vec<(i64, std::borrow::Cow<'_, str>)> = MIGRATOR
         .iter()
         .filter(|m| !m.migration_type.is_down_migration())
-        .map(|m| m.version)
-        .collect::<Vec<_>>();
-    let target = target.iter().rev().nth(2).copied().unwrap_or(0);
+        .map(|m| (m.version, m.description.clone()))
+        .collect();
+    let rbac_index = up_migrations
+        .iter()
+        .position(|(_, description)| description.contains("rbac"))
+        .unwrap_or_else(|| panic!("the rbac migration must exist in the chain"));
+    let target = up_migrations[rbac_index - 1].0;
     MIGRATOR.undo(&pool, target).await?;
     create_user(&pool, "early@example.test").await;
     let late = create_user(&pool, "late@example.test").await;

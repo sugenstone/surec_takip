@@ -8,6 +8,7 @@ pub mod migrations;
 pub mod organizations;
 pub mod password;
 pub mod permissions;
+pub mod projects;
 pub mod rbac;
 pub mod users;
 pub mod workspaces;
@@ -120,6 +121,18 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}",
             get(workspaces::get_workspace),
         )
+        .route(
+            "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects",
+            post(projects::create_project_handler).get(projects::list_projects),
+        )
+        .route(
+            "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}",
+            get(projects::get_project).patch(projects::update_project_handler),
+        )
+        .route(
+            "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/effective-permissions",
+            get(permissions::effective_workspace_permissions),
+        )
         .fallback(not_found)
         .method_not_allowed_fallback(method_not_allowed)
         .layer(middleware::from_fn(request_context))
@@ -203,6 +216,11 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         workspaces::create_workspace,
         workspaces::list_workspaces,
         workspaces::get_workspace,
+        projects::create_project_handler,
+        projects::list_projects,
+        projects::get_project,
+        projects::update_project_handler,
+        permissions::effective_workspace_permissions,
         organizations::list_permissions,
         organizations::list_roles,
         permissions::effective_permissions,
@@ -227,6 +245,11 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         workspaces::WorkspacePublic,
         workspaces::WorkspaceMembershipPublic,
         workspaces::WorkspaceListResponse,
+        projects::CreateProjectRequest,
+        projects::UpdateProjectRequest,
+        projects::ProjectPublic,
+        projects::ProjectMutationResponse,
+        projects::ProjectListResponse,
         organizations::PermissionPublic,
         organizations::PermissionListResponse,
         organizations::RolePublic,

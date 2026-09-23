@@ -27,6 +27,7 @@ Starter extraction gate değerlendirmesi sıradaki adımdır.
 - [RBAC authorization](docs/decisions/0008-rbac-authorization.md)
 - [User invitations](docs/decisions/0009-user-invitations.md)
 - [Minimal app shell](docs/decisions/0010-minimal-app-shell.md)
+- [Project domain foundation](docs/decisions/0011-project-domain-foundation.md)
 
 ## Mevcut yapı
 
@@ -172,6 +173,23 @@ alınır. Header'daki workspace seçici presentation context'tir; SSR,
 sunucudan dönen permitted liste ile doğrular ve org değişiminde stale
 seçim taşınmaz. Ayrıntılar ADR 0007'de.
 
+## Projeler
+
+İlk ürün-domain modülü (ADR 0011). Route parent zinciri authoritativedir:
+`/api/v1/organizations/{org}/workspaces/{ws}/projects[/{project}]` — project
+id tek başına hiçbir şey çözmez; yanlış parent kombinasyonu uniform 404'dür.
+DB katmanında `FOREIGN KEY (tenant_id, workspace_id) → workspaces(tenant_id,
+id)` cross-tenant satırı depolanamaz kılar. Okuma eligibility-based (aktif
+org + workspace üyeliği); mutasyonlar `projects:create` / `projects:update`
+izinleriyle, `status: "archived"` set eden PATCH'ler ek olarak
+`projects:archive` ister. Status yaşam döngüsü: active/completed/archived
+(geçiş modeli ADR 0011'de). Slug uniqueness workspace başınadır (citext,
+case-insensitive). Create/update transaction içinde membership + permission
+yeniden doğrular (TOCTOU). UI: `/app/{org}/{ws}/projects` — liste, boş durum,
+permission-aware create formu; detay sayfası düzenleme + yaşam döngüsü
+kontrolleri ve gelecekteki Bölümler için yer tutucu. DELETE/restore
+endpoint'i, ürün semantiği tanımlanana kadar ertelendi.
+
 ## Dil ve tema foundation
 
 Çeviri anahtarları `apps/web/src/lib/i18n` altında; Svelte metinleri sözlükten
@@ -216,7 +234,10 @@ Mevcut migration'lar: `001` citext; `002` users + sessions; `003`
 organizations + organization_memberships (ADR 0006); `004` workspaces +
 workspace_memberships (ADR 0007); `005` RBAC — permissions/roles/
 role_permissions/membership_roles + composite FK'ler + pre-RBAC org'lar
-için (ADR 0008); `006` invitations + `members:invite` + Owner grant (ADR 0009). SQLx
+için (ADR 0008); `006` invitations + `members:invite` + Owner grant (ADR
+0009); `007` projects — workspace-scoped ilk ürün domain tablosu, composite
+FK + slug/status CHECK'leri + `projects:*` izinleri ve Owner grant backfill
+(ADR 0011). SQLx
 `_sqlx_migrations` tablosunda version/checksum tutar. Uygulanmış SQL dosyası
 sonradan değiştirilmez; yeni migration eklenir. Dosyalar LF satır sonuyla tutulur.
 

@@ -243,24 +243,31 @@ authorization always joins ACTIVE memberships as defense in depth.
 
 ### projects
 
+Implemented by migration `007_projects` (ADR 0011). `slug` replaces the
+earlier `public_code` concept and reuses the shared slug normalization
+(citext, parent-scoped uniqueness); `status` is the deliberately small V1
+lifecycle (`active | completed | archived`, DB CHECK). Future columns
+(priority/starts_at/due_at/revision/created_by/updated_by) arrive with their
+own phases; adding them later is a non-breaking extension.
+
 ``` text
 id uuid PK
 tenant_id
 workspace_id
-public_code text
-name
-description NULL
-system_status text
-priority text NULL
-starts_at NULL
-due_at NULL
-revision bigint NOT NULL default 1
+name text (1..200)
+slug citext (1..64)
+description text NULL
+status text NOT NULL default 'active'
+  CHECK (status IN ('active','completed','archived'))
 created_at
 updated_at
 deleted_at
-created_by
-updated_by
-UNIQUE (tenant_id, public_code)
+FOREIGN KEY (tenant_id, workspace_id)
+  REFERENCES workspaces (tenant_id, id)
+UNIQUE (workspace_id, slug)          -- hard, case-insensitive (citext);
+                                     -- workspace_id is globally unique, so
+                                     -- this implies per-tenant uniqueness
+INDEX (workspace_id, created_at DESC, id)  -- list hot path
 ```
 
 ### sections

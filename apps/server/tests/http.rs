@@ -271,6 +271,52 @@ async fn named_path_struct_extraction_ignores_extra_route_parameters()
     Ok(())
 }
 
+// Step 17 pins the same contract for the NEW three-field route shape:
+// ProjectContext's ProjectRoute must keep extracting by field name on the
+// future four-parameter routes (.../projects/{p}/sections/{s}), so adding
+// Sections cannot break project resolution.
+#[tokio::test]
+async fn project_route_struct_extraction_ignores_extra_route_parameters()
+-> Result<(), Box<dyn std::error::Error>> {
+    #[derive(serde::Deserialize)]
+    struct ProjectRoute {
+        organization_id: String,
+        workspace_id: String,
+        project_id: String,
+    }
+    async fn deep_handler(
+        axum::extract::Path(route): axum::extract::Path<ProjectRoute>,
+    ) -> axum::Json<serde_json::Value> {
+        axum::Json(serde_json::json!({
+            "organization_id": route.organization_id,
+            "workspace_id": route.workspace_id,
+            "project_id": route.project_id,
+        }))
+    }
+    let router = axum::Router::new().route(
+        "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}",
+        axum::routing::get(deep_handler),
+    );
+    let response = router
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/organizations/org-1/workspaces/ws-1/projects/prj-1/sections/sec-1")
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "three-field struct extraction must succeed on a four-parameter route"
+    );
+    let bytes = to_bytes(response.into_body(), 4096).await?;
+    let body: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(body["organization_id"], "org-1");
+    assert_eq!(body["workspace_id"], "ws-1");
+    assert_eq!(body["project_id"], "prj-1");
+    Ok(())
+}
+
 #[tokio::test]
 async fn rbac_catalog_endpoints_reject_unauthenticated_requests()
 -> Result<(), Box<dyn std::error::Error>> {
