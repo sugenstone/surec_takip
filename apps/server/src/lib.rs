@@ -7,6 +7,7 @@ pub mod invitations;
 pub mod migrations;
 pub mod organizations;
 pub mod password;
+pub mod permissions;
 pub mod rbac;
 pub mod users;
 pub mod workspaces;
@@ -98,6 +99,10 @@ pub fn router(state: AppState) -> Router {
         .route(
             "/api/v1/organizations/{organization_id}/roles",
             get(organizations::list_roles),
+        )
+        .route(
+            "/api/v1/organizations/{organization_id}/effective-permissions",
+            get(permissions::effective_permissions),
         )
         .route(
             "/api/v1/organizations/{organization_id}/invitations",
@@ -200,6 +205,7 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         workspaces::get_workspace,
         organizations::list_permissions,
         organizations::list_roles,
+        permissions::effective_permissions,
         invitations::create_invitation,
         invitations::list_invitations,
         invitations::revoke_invitation,
@@ -225,6 +231,8 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         organizations::PermissionListResponse,
         organizations::RolePublic,
         organizations::RoleListResponse,
+        permissions::EffectivePermissionsData,
+        permissions::EffectivePermissionsResponse,
         invitations::CreateInvitationRequest,
         invitations::CreateInvitationResponse,
         invitations::CreateInvitationData,

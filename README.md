@@ -3,12 +3,11 @@
 Genel amaçlı, multi-tenant iş ve operasyon platformu. Mimari modular monolith;
 PostgreSQL doğruluk kaynağıdır. Varsayılan arayüz dili tr-TR, ikinci dil en.
 
-**Durum:** First Agent Mission 2–13 + cross-tenant security milestone
-tamamlandı. Adım 14 user invitations tamamlandı: `members:invite` izni,
-SHA-256 digest'li opaque token davetiyeleri, atomik kimlik bağlı kabul,
-generic enumeration-resistant red, re-invite replace, reactivation'ta
-privilege-resurrection önleme. Role yönetim API'leri ve domain özellikleri
-henüz uygulanmadı.
+**Durum:** First Agent Mission 2–14 + cross-tenant security milestone
+tamamlandı. Adım 15 minimal app shell tamamlandı: URL-addressed org/ws
+context (`/app/[orgId]/[wsId]`), SSR shell, org/workspace switcher'lar,
+permission-aware action visibility, responsive mobile nav, tr/en shell.
+Starter extraction gate değerlendirmesi sıradaki adımdır.
 
 ## Bağlayıcı belgeler
 
@@ -27,6 +26,7 @@ henüz uygulanmadı.
 - [Workspaces/memberships](docs/decisions/0007-workspaces-memberships.md)
 - [RBAC authorization](docs/decisions/0008-rbac-authorization.md)
 - [User invitations](docs/decisions/0009-user-invitations.md)
+- [Minimal app shell](docs/decisions/0010-minimal-app-shell.md)
 
 ## Mevcut yapı
 
@@ -357,6 +357,10 @@ integration) ve docker (`test:docker` smoke). Faz 1 kapanışında (commit
 78a7b4d) beş iş de hosted'da yeşildi.
 
 ## Sonraki aşama
+
+First Agent Mission sırası: Starter extraction gate değerlendirmesi
+(§43/ADR 0005; generic foundation tamamlandı, CI yeşil — koşullar sağlandı)
+→ projects (adım 17+).
 
 First Agent Mission sırası: invitations (adım 14) → minimal app shell →
 starter extraction gate değerlendirmesi → projects. Role yönetim API'leri

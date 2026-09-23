@@ -327,6 +327,59 @@
         }
       }
     },
+    "/api/v1/organizations/{organization_id}/effective-permissions": {
+      "get": {
+        "tags": [
+          "permissions"
+        ],
+        "summary": "Effective organization-scope permission keys for the authenticated user.\nFrontend uses this for action visibility only; the backend remains the\nauthorization authority (ADR 0010).",
+        "operationId": "effective_permissions",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Organization id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EffectivePermissionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/organizations/{organization_id}/invitations": {
       "get": {
         "tags": [
@@ -1037,6 +1090,31 @@
         "properties": {
           "data": {
             "$ref": "#/components/schemas/CreateWorkspaceData"
+          }
+        }
+      },
+      "EffectivePermissionsData": {
+        "type": "object",
+        "required": [
+          "permissions"
+        ],
+        "properties": {
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "EffectivePermissionsResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/EffectivePermissionsData"
           }
         }
       },

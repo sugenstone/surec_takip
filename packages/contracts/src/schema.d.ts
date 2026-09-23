@@ -111,6 +111,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/organizations/{organization_id}/effective-permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Effective organization-scope permission keys for the authenticated user.
+         *     Frontend uses this for action visibility only; the backend remains the
+         *     authorization authority (ADR 0010).
+         */
+        get: operations["effective_permissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organizations/{organization_id}/invitations": {
         parameters: {
             query?: never;
@@ -282,6 +303,12 @@ export interface components {
         };
         CreateWorkspaceResponse: {
             data: components["schemas"]["CreateWorkspaceData"];
+        };
+        EffectivePermissionsData: {
+            permissions: string[];
+        };
+        EffectivePermissionsResponse: {
+            data: components["schemas"]["EffectivePermissionsData"];
         };
         ErrorBody: {
             code: components["schemas"]["ErrorCode"];
@@ -664,6 +691,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrganizationPublic"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    effective_permissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Organization id */
+                organization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EffectivePermissionsResponse"];
                 };
             };
             401: {
