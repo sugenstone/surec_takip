@@ -6,6 +6,7 @@ import {
   projectErrorMessageKey,
   sectionErrorMessageKey,
   workspaceErrorMessageKey,
+  workItemErrorMessageKey,
 } from './errors';
 import { validOrganizationName, validWorkspaceName } from '../org';
 
@@ -127,5 +128,35 @@ describe('organization name validation', () => {
     expect(validOrganizationName('')).toBe(false);
     expect(validOrganizationName('   ')).toBe(false);
     expect(validOrganizationName('a'.repeat(201))).toBe(false);
+  });
+});
+
+describe('work item error mapping', () => {
+  it('maps status codes without inspecting server messages', () => {
+    for (const [code, key] of [
+      ['PERMISSION_DENIED', 'forbidden'],
+      ['RESOURCE_NOT_FOUND', 'notFound'],
+      ['AUTH_REQUIRED', 'auth'],
+      ['NETWORK_ERROR', 'network'],
+      ['INTERNAL_ERROR', 'unexpected'],
+    ]) {
+      expect(
+        workItemErrorMessageKey(new ApiRequestError(400, code, 'misleading slug message', '')),
+      ).toBe(`workItems.error.${key}`);
+    }
+  });
+  it('maps validation fields and preserves a generic fallback', () => {
+    for (const field of ['slug', 'position', 'status']) {
+      expect(
+        workItemErrorMessageKey(
+          new ApiRequestError(422, 'VALIDATION_ERROR', 'ignored', '', {
+            fields: { [field]: ['ignored'] },
+          }),
+        ),
+      ).toBe(`workItems.error.${field}`);
+    }
+    expect(workItemErrorMessageKey(new ApiRequestError(422, 'VALIDATION_ERROR', '', ''))).toBe(
+      'workItems.error.validation',
+    );
   });
 });

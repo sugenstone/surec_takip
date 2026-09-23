@@ -16,6 +16,7 @@ const project = `surec-e2e-${randomBytes(4).toString('hex')}`;
 const API_PORT = '28081';
 const env = {
   ...process.env,
+  E2E_COMPOSE_PROJECT: project,
   POSTGRES_PORT: '25433',
   API_PORT,
   // The Vite /api proxy (browser) and SvelteKit SSR both target this stack.
@@ -53,12 +54,13 @@ try {
   await compose('up', '--build', '--detach', '--wait', '--wait-timeout', '180', 'db', 'server');
   // Distinct users keep spec fixtures isolated from each other: auth/shell
   // (e2e), projects owner (e2e2), invited permission-less member (e2e3) and
-  // sections owner (e2e4).
+  // sections owner (e2e4) and work items owner (e2e5).
   for (const [email, displayName] of [
     ['e2e@example.test', 'E2e User'],
     ['e2e2@example.test', 'E2e User Two'],
     ['e2e3@example.test', 'E2e User Three'],
     ['e2e4@example.test', 'E2e User Four'],
+    ['e2e5@example.test', 'E2e User Five'],
   ]) {
     await compose(
       'run',

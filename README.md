@@ -3,11 +3,10 @@
 Genel amaçlı, multi-tenant iş ve operasyon platformu. Mimari modular monolith;
 PostgreSQL doğruluk kaynağıdır. Varsayılan arayüz dili tr-TR, ikinci dil en.
 
-**Durum:** First Agent Mission 2–14 + cross-tenant security milestone
-tamamlandı. Adım 15 minimal app shell tamamlandı: URL-addressed org/ws
-context (`/app/[orgId]/[wsId]`), SSR shell, org/workspace switcher'lar,
-permission-aware action visibility, responsive mobile nav, tr/en shell.
-Starter extraction gate değerlendirmesi sıradaki adımdır.
+**Durum:** Generic SaaS foundation ve starter extraction tamamlandı.
+Projects (STEP 17), recursive Sections (STEP 18) mevcut. STEP 19 Work Items
+foundation yerel uygulama/review aşamasında; hosted CI henüz bu değişikliği
+çalıştırmadı. Process/timer/atama alanları henüz uygulanmadı.
 
 ## Bağlayıcı belgeler
 
@@ -29,6 +28,7 @@ Starter extraction gate değerlendirmesi sıradaki adımdır.
 - [Minimal app shell](docs/decisions/0010-minimal-app-shell.md)
 - [Project domain foundation](docs/decisions/0011-project-domain-foundation.md)
 - [Sections / recursive hierarchy](docs/decisions/0012-sections-recursive-hierarchy.md)
+- [Work Items foundation](docs/decisions/0013-work-items-domain-foundation.md)
 
 ## Mevcut yapı
 
@@ -210,6 +210,20 @@ kapsamındadır. Yaşam döngüsü yapısal `active|archived`; arşiv yalnız
 sayfasında izin-farkındalıklı ağaç paneli (ekle/alt ekle/yeniden
 adlandır/taşı/köke taşı/yukarı-aşağı/arşivle).
 
+## İşçilik (Work Items)
+
+Bölüm ağacındaki İşçilik bağlantısı section listesini açar; oluşturma,
+detay bağlantısı, düzenleme ve arşivleme mevcuttur. Route:
+`/app/{org}/{ws}/projects/{project}/sections/{section}/work-items[/{item}]`.
+Backend tam üst zinciri ve üyelikleri doğrular; create/update/archive ayrı
+`work_items:*` izinleriyle çalışır. Arşiv normal list/get'ten düşer, satır ve
+slug korunur; restore/move henüz yoktur. Process veya timer içermez.
+
+`npm run test:db` yeni `work_items` target'ını da içerir. E2E runner bir
+izole Work Items kullanıcısı ekler ve `E2E_COMPOSE_PROJECT` değerini yalnız
+kendi geçici Compose fixture'ını hazırlayan teste iletir; geliştirici bu
+değişkeni ayarlamaz. Üye test fixture'ı yalnız bu geçici veritabanında kurulur.
+
 ## Dil ve tema foundation
 
 Çeviri anahtarları `apps/web/src/lib/i18n` altında; Svelte metinleri sözlükten
@@ -259,7 +273,8 @@ için (ADR 0008); `006` invitations + `members:invite` + Owner grant (ADR
 FK + slug/status CHECK'leri + `projects:*` izinleri ve Owner grant backfill
 (ADR 0011); `008` sections — genel recursive hiyerarşi, composite self-FK +
 kardeş-kapsamı slug partial unique + `sections:*` izinleri ve Owner grant
-backfill (ADR 0012). SQLx
+backfill (ADR 0012); `009` work_items — section-scoped composite FK, hard slug
+unique, ordering ve `work_items:*` grant backfill (ADR 0013). SQLx
 `_sqlx_migrations` tablosunda version/checksum tutar. Uygulanmış SQL dosyası
 sonradan değiştirilmez; yeni migration eklenir. Dosyalar LF satır sonuyla tutulur.
 
@@ -401,10 +416,5 @@ integration) ve docker (`test:docker` smoke). Faz 1 kapanışında (commit
 
 ## Sonraki aşama
 
-First Agent Mission sırası: Starter extraction gate değerlendirmesi
-(§43/ADR 0005; generic foundation tamamlandı, CI yeşil — koşullar sağlandı)
-→ projects (adım 17+).
-
-First Agent Mission sırası: invitations (adım 14) → minimal app shell →
-starter extraction gate değerlendirmesi → projects. Role yönetim API'leri
-(custom role CRUD, atama endpoint'leri) admin fazına ertelendi.
+STEP 19 final design/security/test quality review. Commit/push bu uygulama
+görevinin kapsamında değildir. Process domain'i ayrı milestone'dır.

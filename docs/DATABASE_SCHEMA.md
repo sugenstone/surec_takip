@@ -334,6 +334,34 @@ indexes for `(tenant_id, project_id, parent_id, position)`. - if
 recursive queries later become a proven bottleneck, evaluate closure
 table/materialized path; do not prematurely add both.
 
+### work_items (implemented — STEP 19, ADR 0013)
+
+Section-owned, non-recursive entity; implemented by migration
+`20260923160000_work_items`. The conceptual cards model below is not implemented.
+
+```text
+id uuid PRIMARY KEY
+tenant_id uuid NOT NULL FK organizations
+workspace_id uuid NOT NULL
+project_id uuid NOT NULL
+section_id uuid NOT NULL
+name text NOT NULL (trimmed length 1..200)
+slug citext NOT NULL (length 1..64)
+position integer NOT NULL CHECK >= 0
+status text NOT NULL DEFAULT active CHECK active|completed|archived
+created_at / updated_at timestamptz NOT NULL DEFAULT now()
+deleted_at timestamptz NULL
+UNIQUE(section_id, slug) -- includes archived/deleted rows
+FOREIGN KEY(tenant_id, workspace_id, project_id, section_id)
+  REFERENCES sections(tenant_id, workspace_id, project_id, id)
+INDEX(section_id, position, id)
+```
+
+Reads exclude archived and deleted items. Mutations revalidate and lock
+parents/memberships/grants; archived/deleted project or direct section blocks
+access. Archive is status-only retention, not hard delete. No restore/move or
+Process schema in STEP 19. See [ADR 0013](decisions/0013-work-items-domain-foundation.md).
+
 ### cards
 
 ``` text
@@ -1115,7 +1143,7 @@ as mandated by AGENTS.md. Their UI/dispatch features remain in their planned pha
 006 roles + permissions
 007 projects
 008 sections
-009 cards + card_relations
+009 work_items (implemented; conceptual cards/card_relations superseded for STEP 19)
 010 dynamic properties
 011 processes + process_steps
 012 dependencies

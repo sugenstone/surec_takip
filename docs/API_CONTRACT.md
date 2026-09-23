@@ -387,6 +387,39 @@ POST   /.../sections/{section_id}/duplicate
 POST   /.../projects/{project_id}/sections/bulk-create
 ```
 
+# 10.1 Work Items (implemented — STEP 19)
+
+Base: `/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items`.
+
+| Method | Suffix | Input | Success |
+| --- | --- | --- | --- |
+| GET | collection | none | 200 `{data: WorkItemPublic[]}` |
+| POST | collection | name, optional slug | 201 `{data: WorkItemPublic}` |
+| GET | `/{work_item_id}` | none | 200 bare WorkItemPublic |
+| PATCH | `/{work_item_id}` | optional name, slug, position, status | 200 `{data: WorkItemPublic}` |
+
+Public fields: id, organization_id, workspace_id, project_id, section_id,
+name, slug, position, status. Scope and initial active status are server-derived;
+unknown DTO fields (including identity/move fields) are rejected.
+
+Reads require both memberships and the exact parent route chain. Archived or
+deleted work items and archived/deleted project/direct section are invisible
+(404). List order `(position,id)`; create appends; position is a non-negative
+integer. Slug namespace is section-local and retained after archive/deletion.
+
+Create requires `work_items:create`; all PATCH requires `work_items:update`;
+setting archived additionally requires `work_items:archive`. Active/completed
+are manual labels; archive is terminal for this V1 API, retained in storage.
+No DELETE/restore/move/Process endpoint exists here. Existing Projects/Sections
+archive behavior is unchanged.
+
+Error ordering: 401 → 404 → 403 → 422 field/domain validation. Structurally
+invalid JSON/type/unknown-field requests follow existing 400 VALIDATION_ERROR
+convention after eligibility and base permission. Mutation revalidation is
+inside a transaction with parent/membership/grant locks. Field keys are name,
+slug, position, status. No raw DB errors. No revision or pagination protocol
+is introduced in this slice; see [ADR 0013](decisions/0013-work-items-domain-foundation.md).
+
 # 11. Cards
 
 ``` text

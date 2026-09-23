@@ -12,6 +12,7 @@ pub mod projects;
 pub mod rbac;
 pub mod sections;
 pub mod users;
+pub mod work_items;
 pub mod workspaces;
 
 use crate::password::PasswordService;
@@ -142,6 +143,8 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}",
             get(sections::get_section).patch(sections::update_section_handler),
         )
+        .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items", post(work_items::create_work_item_handler).get(work_items::list_work_items))
+        .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}", get(work_items::get_work_item).patch(work_items::update_work_item_handler))
         .fallback(not_found)
         .method_not_allowed_fallback(method_not_allowed)
         .layer(middleware::from_fn(request_context))
@@ -232,6 +235,10 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         sections::create_section_handler,
         sections::list_sections,
         sections::get_section,
+        work_items::create_work_item_handler,
+        work_items::list_work_items,
+        work_items::get_work_item,
+        work_items::update_work_item_handler,
         sections::update_section_handler,
         permissions::effective_workspace_permissions,
         organizations::list_permissions,
@@ -268,6 +275,11 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         sections::SectionPublic,
         sections::SectionMutationResponse,
         sections::SectionListResponse,
+        work_items::CreateWorkItemRequest,
+        work_items::UpdateWorkItemRequest,
+        work_items::WorkItemPublic,
+        work_items::WorkItemMutationResponse,
+        work_items::WorkItemListResponse,
         organizations::PermissionPublic,
         organizations::PermissionListResponse,
         organizations::RolePublic,

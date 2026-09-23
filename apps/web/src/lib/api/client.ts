@@ -224,3 +224,37 @@ export async function updateSection(
   );
   return body.data;
 }
+
+export type WorkItemPublic = components['schemas']['WorkItemPublic'];
+export type WorkItemScope = {
+  organizationId: string;
+  workspaceId: string;
+  projectId: string;
+  sectionId: string;
+};
+export function workItemsPath(scope: WorkItemScope): string {
+  return `/api/v1/organizations/${scope.organizationId}/workspaces/${scope.workspaceId}/projects/${scope.projectId}/sections/${scope.sectionId}/work-items`;
+}
+export async function createWorkItem(
+  scope: WorkItemScope,
+  input: components['schemas']['CreateWorkItemRequest'],
+): Promise<WorkItemPublic> {
+  const body = await request<{ data: WorkItemPublic }>(workItemsPath(scope), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return body.data;
+}
+export async function updateWorkItem(
+  scope: WorkItemScope,
+  id: string,
+  input: components['schemas']['UpdateWorkItemRequest'],
+): Promise<WorkItemPublic> {
+  const body = await request<{ data: WorkItemPublic }>(`${workItemsPath(scope)}/${id}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return body.data;
+}

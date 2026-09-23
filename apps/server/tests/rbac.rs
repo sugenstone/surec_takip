@@ -189,8 +189,8 @@ async fn organization_creation_bootstraps_owner_atomically(
     .fetch_one(&pool)
     .await?;
     assert_eq!(
-        grants, 8,
-        "owner grants workspaces:create + members:invite + projects:* + sections:* at org scope"
+        grants, 11,
+        "owner grants workspaces:create + members:invite + projects:* + sections:* + work_items:* at org scope"
     );
     let assignments: i64 =
         sqlx::query_scalar("SELECT count(*) FROM membership_roles WHERE tenant_id = $1")

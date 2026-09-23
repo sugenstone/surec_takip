@@ -51,30 +51,30 @@ async fn migration_can_revert_and_reapply_on_disposable_database(
     pool: PgPool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     migrations::revert_last(&pool).await?;
+    let work_items_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'work_items')",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(
+        !work_items_exists,
+        "revert must remove the work items migration"
+    );
+    let work_item_permissions: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM permissions WHERE key LIKE 'work_items:%'")
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(
+        work_item_permissions, 0,
+        "revert must remove the work item permission catalog rows"
+    );
     let sections_exists: bool = sqlx::query_scalar(
         "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'sections')",
     )
     .fetch_one(&pool)
     .await?;
     assert!(
-        !sections_exists,
-        "revert must remove the sections migration"
-    );
-    let section_permissions: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM permissions WHERE key LIKE 'sections:%'")
-            .fetch_one(&pool)
-            .await?;
-    assert_eq!(
-        section_permissions, 0,
-        "revert must remove the section permission catalog rows"
-    );
-    let projects_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'projects')",
-    )
-    .fetch_one(&pool)
-    .await?;
-    assert!(
-        projects_exists,
+        sections_exists,
         "revert of the newest migration must keep earlier migrations applied"
     );
     assert!(migrations::verify(&pool).await.is_err());
@@ -97,11 +97,13 @@ async fn changed_migration_checksum_is_rejected(
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn revert_preserves_dependent_data(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
-    // A dependent object on sections must block rollback instead of being
+    // A dependent object on work_items must block rollback instead of being
     // dropped.
-    sqlx::query("CREATE TABLE migration_safety_probe (section_id uuid REFERENCES sections (id))")
-        .execute(&pool)
-        .await?;
+    sqlx::query(
+        "CREATE TABLE migration_safety_probe (work_item_id uuid REFERENCES work_items (id))",
+    )
+    .execute(&pool)
+    .await?;
     assert!(migrations::revert_last(&pool).await.is_err());
     migrations::verify(&pool).await?;
     let _: i64 = sqlx::query_scalar("SELECT count(*) FROM migration_safety_probe")

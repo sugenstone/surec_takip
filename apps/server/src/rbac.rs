@@ -60,6 +60,9 @@ pub async fn bootstrap_builtin_roles(
         crate::sections::SECTIONS_CREATE.0,
         crate::sections::SECTIONS_UPDATE.0,
         crate::sections::SECTIONS_ARCHIVE.0,
+        crate::work_items::WORK_ITEMS_CREATE.0,
+        crate::work_items::WORK_ITEMS_UPDATE.0,
+        crate::work_items::WORK_ITEMS_ARCHIVE.0,
     ] {
         sqlx::query(
             "INSERT INTO role_permissions (role_id, permission_id, scope) \
@@ -370,6 +373,40 @@ pub async fn reactivate_membership(
 /// PERMISSION_DENIED code, no role/permission internals leaked.
 pub fn permission_denied(request_id: &RequestId) -> ApiError {
     ApiError::new(ErrorCode::PermissionDenied, request_id.0.clone())
+}
+
+/// Retains the supporting grant/assignment rows until the mutation commits.
+/// The predicate is the existing workspace permission policy; no role-name authority.
+pub async fn lock_workspace_permission_in_tx(
+    transaction: &mut PgConnection,
+    tenant_id: Uuid,
+    workspace_id: Uuid,
+    user_id: Uuid,
+    permission: PermissionKey,
+) -> Result<bool, ApiError> {
+    let granted = sqlx::query_scalar::<_, uuid::Uuid>(
+        "SELECT mr.id FROM membership_roles mr \
+            JOIN roles r ON r.id = mr.role_id AND r.tenant_id = mr.tenant_id AND r.deleted_at IS NULL \
+            JOIN role_permissions rp ON rp.role_id = r.id \
+                 AND ((mr.workspace_id IS NULL AND rp.scope = 'organization') \
+                   OR (mr.workspace_id = $3 AND rp.scope = 'workspace')) \
+            JOIN permissions p ON p.id = rp.permission_id AND p.key = $4 \
+            JOIN organization_memberships om ON om.tenant_id = mr.tenant_id AND om.user_id = mr.user_id \
+                 AND om.status = 'active' AND om.deleted_at IS NULL \
+            JOIN workspace_memberships wsm ON wsm.workspace_id = $3 AND wsm.user_id = mr.user_id \
+                 AND wsm.status = 'active' AND wsm.deleted_at IS NULL \
+            WHERE mr.tenant_id = $1 AND mr.user_id = $2 \
+              AND (mr.workspace_id IS NULL OR mr.workspace_id = $3) \
+            ORDER BY mr.id LIMIT 1 FOR SHARE OF mr, r, rp, p, om, wsm",
+    )
+    .bind(tenant_id)
+    .bind(user_id)
+    .bind(workspace_id)
+    .bind(permission.0)
+    .fetch_optional(&mut *transaction)
+    .await
+    .map_err(|_| ApiError::new(ErrorCode::InternalError, String::new()))?;
+    Ok(granted.is_some())
 }
 
 #[cfg(test)]

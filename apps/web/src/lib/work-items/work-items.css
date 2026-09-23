@@ -1,0 +1,76 @@
+.work-items {
+  display: grid;
+  gap: var(--space-5);
+  min-inline-size: 0;
+}
+.work-items h2 {
+  font-size: var(--text-heading);
+  font-weight: 600;
+}
+.work-items form {
+  display: grid;
+  gap: var(--space-2);
+  max-inline-size: 36rem;
+}
+.work-items input,
+.work-items select {
+  min-inline-size: 0;
+  inline-size: 100%;
+  box-sizing: border-box;
+  min-block-size: var(--space-12);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--foreground);
+}
+.work-items button {
+  padding: var(--space-3) var(--space-4);
+  min-block-size: var(--space-12);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--primary-foreground);
+  cursor: pointer;
+  justify-self: start;
+}
+.work-items button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.work-items .secondary {
+  background: var(--secondary);
+  color: var(--foreground);
+}
+.work-items .error {
+  color: var(--danger);
+}
+.work-items ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.work-items li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+  padding-block: var(--space-3);
+  border-block-end: 1px solid var(--border);
+}
+.work-items a {
+  overflow-wrap: anywhere;
+  padding-block: var(--space-2);
+}
+.work-items .item-status {
+  color: var(--status-active);
+}
+.work-items .item-status.completed {
+  color: var(--status-completed);
+}
+.work-items .archive-confirm {
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}

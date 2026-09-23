@@ -341,3 +341,81 @@ impl FromRequestParts<AppState> for SectionContext {
         }
     }
 }
+
+/// Work item collection context adds its own parent lifecycle policy without
+/// changing the existing Sections/Projects read and reactivation behavior.
+#[derive(Clone)]
+pub struct WorkItemSectionContext {
+    pub user_id: Uuid,
+    pub scope: crate::work_items::WorkItemScope,
+}
+impl FromRequestParts<AppState> for WorkItemSectionContext {
+    type Rejection = ApiError;
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let project = ProjectContext::from_request_parts(parts, state).await?;
+        if project.project.status == "archived" {
+            return Err(not_found(parts));
+        }
+        let Path(route) = Path::<SectionRoute>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| not_found(parts))?;
+        let section_id = route
+            .section_id
+            .parse::<Uuid>()
+            .map_err(|_| not_found(parts))?;
+        let section = sections::find_accessible(
+            &state.pool,
+            project.organization_id,
+            project.workspace_id,
+            project.project_id,
+            section_id,
+        )
+        .await
+        .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id_of(parts)))?
+        .filter(|s| s.status == "active")
+        .ok_or_else(|| not_found(parts))?;
+        Ok(Self {
+            user_id: project.user_id,
+            scope: crate::work_items::WorkItemScope {
+                organization_id: project.organization_id,
+                workspace_id: project.workspace_id,
+                project_id: project.project_id,
+                section_id: section.id,
+            },
+        })
+    }
+}
+
+#[derive(Deserialize)]
+struct WorkItemRoute {
+    work_item_id: String,
+}
+
+pub struct WorkItemContext {
+    pub parent: WorkItemSectionContext,
+    pub work_item: crate::work_items::WorkItemPublic,
+}
+impl FromRequestParts<AppState> for WorkItemContext {
+    type Rejection = ApiError;
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let parent = WorkItemSectionContext::from_request_parts(parts, state).await?;
+        let Path(route) = Path::<WorkItemRoute>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| not_found(parts))?;
+        let id = route
+            .work_item_id
+            .parse::<Uuid>()
+            .map_err(|_| not_found(parts))?;
+        let work_item = crate::work_items::find_accessible(&state.pool, parent.scope, id)
+            .await
+            .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id_of(parts)))?
+            .ok_or_else(|| not_found(parts))?;
+        Ok(Self { parent, work_item })
+    }
+}

@@ -92,3 +92,26 @@ export function sectionErrorMessageKey(error: unknown): TranslationKey {
   }
   return 'sections.error.unexpected';
 }
+
+export function workItemErrorMessageKey(error: unknown): TranslationKey {
+  if (error instanceof ApiRequestError) {
+    switch (error.code) {
+      case 'VALIDATION_ERROR': {
+        const fields = (error.details as { fields?: Record<string, unknown> } | undefined)?.fields;
+        if (fields && 'slug' in fields) return 'workItems.error.slug';
+        if (fields && 'position' in fields) return 'workItems.error.position';
+        if (fields && 'status' in fields) return 'workItems.error.status';
+        return 'workItems.error.validation';
+      }
+      case 'PERMISSION_DENIED':
+        return 'workItems.error.forbidden';
+      case 'RESOURCE_NOT_FOUND':
+        return 'workItems.error.notFound';
+      case 'AUTH_REQUIRED':
+        return 'workItems.error.auth';
+      case 'NETWORK_ERROR':
+        return 'workItems.error.network';
+    }
+  }
+  return 'workItems.error.unexpected';
+}

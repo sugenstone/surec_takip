@@ -319,6 +319,19 @@
             </form>
           {:else}
             <span class="section-name">{row.section.name}</span>
+            {#if row.section.status === 'active' && data.project.status !== 'archived'}
+              <a
+                href={resolve(
+                  '/app/[orgId]/[wsId]/projects/[projectId]/sections/[sectionId]/work-items',
+                  {
+                    orgId: data.organization.id,
+                    wsId: data.workspace.id,
+                    projectId: data.project.id,
+                    sectionId: row.section.id,
+                  },
+                )}>{translate(locale, 'workItems.title')}</a
+              >
+            {/if}
             {#if row.section.status === 'archived'}
               <span class="section-status">
                 {translate(locale, sectionStatusKey(row.section.status))}
