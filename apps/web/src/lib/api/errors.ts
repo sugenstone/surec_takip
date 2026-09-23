@@ -46,9 +46,9 @@ export function workspaceErrorMessageKey(error: unknown): TranslationKey {
   return 'workspace.error.unexpected';
 }
 
-// Project mutations distinguish field-level validation failures (name, slug
-// conflict, invalid transition) from permission and connectivity problems
-// using the stable VALIDATION_ERROR code plus the details.fields payload.
+// Project mutations distinguish field-level validation failures (slug/name,
+// invalid transition) from permission and connectivity problems using the
+// stable VALIDATION_ERROR code plus the details.fields payload.
 export function projectErrorMessageKey(error: unknown): TranslationKey {
   if (error instanceof ApiRequestError) {
     switch (error.code) {
@@ -67,4 +67,28 @@ export function projectErrorMessageKey(error: unknown): TranslationKey {
     }
   }
   return 'projects.error.unexpected';
+}
+
+// Section mutations: the parent field covers invalid parents AND cycle
+// attempts — both share one honest localized message (details values are
+// backend strings we deliberately never branch on).
+export function sectionErrorMessageKey(error: unknown): TranslationKey {
+  if (error instanceof ApiRequestError) {
+    switch (error.code) {
+      case 'VALIDATION_ERROR': {
+        const fields = (error.details as { fields?: Record<string, unknown> } | undefined)?.fields;
+        if (fields && 'parent_section_id' in fields) return 'sections.error.invalidParent';
+        if (fields && 'status' in fields) return 'sections.error.invalidTransition';
+        if (fields && 'slug' in fields) return 'sections.error.slugTaken';
+        return 'sections.error.invalidName';
+      }
+      case 'PERMISSION_DENIED':
+        return 'sections.error.forbidden';
+      case 'NETWORK_ERROR':
+        return 'sections.error.network';
+      default:
+        return 'sections.error.unexpected';
+    }
+  }
+  return 'sections.error.unexpected';
 }

@@ -4,6 +4,7 @@ import {
   loginErrorMessageKey,
   organizationErrorMessageKey,
   projectErrorMessageKey,
+  sectionErrorMessageKey,
   workspaceErrorMessageKey,
 } from './errors';
 import { validOrganizationName, validWorkspaceName } from '../org';
@@ -49,6 +50,35 @@ describe('workspace error mapping by stable API code', () => {
     const forbidden = new ApiRequestError(403, 'PERMISSION_DENIED', 'msg', 'id-6');
     expect(workspaceErrorMessageKey(forbidden)).toBe('workspace.error.forbidden');
     expect(workspaceErrorMessageKey(new Error('x'))).toBe('workspace.error.unexpected');
+  });
+});
+
+describe('section error mapping by stable API code and field payload', () => {
+  it('maps parent-field validation failures to the move/cycle message', () => {
+    const parent = new ApiRequestError(422, 'VALIDATION_ERROR', 'msg', 'id-s1', {
+      fields: { parent_section_id: ['Would create a cycle'] },
+    });
+    expect(sectionErrorMessageKey(parent)).toBe('sections.error.invalidParent');
+  });
+
+  it('splits slug, transition, name, permission and network failures', () => {
+    const slug = new ApiRequestError(422, 'VALIDATION_ERROR', 'msg', 'id-s2', {
+      fields: { slug: ['Already taken'] },
+    });
+    expect(sectionErrorMessageKey(slug)).toBe('sections.error.slugTaken');
+    const transition = new ApiRequestError(422, 'VALIDATION_ERROR', 'msg', 'id-s3', {
+      fields: { status: ['Invalid transition'] },
+    });
+    expect(sectionErrorMessageKey(transition)).toBe('sections.error.invalidTransition');
+    const name = new ApiRequestError(422, 'VALIDATION_ERROR', 'msg', 'id-s4', {
+      fields: { name: ['Required'] },
+    });
+    expect(sectionErrorMessageKey(name)).toBe('sections.error.invalidName');
+    const forbidden = new ApiRequestError(403, 'PERMISSION_DENIED', 'msg', 'id-s5');
+    expect(sectionErrorMessageKey(forbidden)).toBe('sections.error.forbidden');
+    const network = new ApiRequestError(0, 'NETWORK_ERROR', 'msg', '');
+    expect(sectionErrorMessageKey(network)).toBe('sections.error.network');
+    expect(sectionErrorMessageKey(new Error('x'))).toBe('sections.error.unexpected');
   });
 });
 

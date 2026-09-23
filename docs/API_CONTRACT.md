@@ -353,29 +353,39 @@ Collaborative mutations include `expected_revision`; resource responses expose
 
 # 10. Sections
 
+Implemented V1 surface (ADR 0012):
+
 ``` text
 GET    /.../projects/{project_id}/sections
 POST   /.../projects/{project_id}/sections
-GET    /.../sections/{section_id}
-PATCH  /.../sections/{section_id}
+GET    /.../projects/{project_id}/sections/{section_id}
+PATCH  /.../projects/{project_id}/sections/{section_id}
+```
+
+- Reads are eligibility-based (V1 has no `sections:read`).
+- Mutations: `sections:create` (POST), `sections:update` (PATCH — including
+  reparent/reorder), and `sections:archive` additionally when a PATCH sets
+  `status: "archived"`.
+- Tree response is a FLAT ordered list (one query; roots first, siblings by
+  `(position, id)`); clients assemble the tree.
+- PATCH `parent_section_id` is three-state: absent = keep, `null` = move to
+  root, UUID = reparent inside the same project. Cycle attempts (self or
+  descendant parent) map to `VALIDATION_ERROR` with
+  `details.fields.parent_section_id`.
+- Status lifecycle: `active | archived` both directions; sections never
+  "complete".
+- `DELETE`/`restore`, dedicated `move`/`duplicate` commands and
+  `bulk-create` are planned later phases (move/reorder are expressible via
+  PATCH today; `expected_revision` arrives with collaborative editing).
+
+Planned later (documented shape, not yet implemented):
+
+``` text
 DELETE /.../sections/{section_id}
 POST   /.../sections/{section_id}/restore
-POST   /.../sections/{section_id}/move
 POST   /.../sections/{section_id}/duplicate
 POST   /.../projects/{project_id}/sections/bulk-create
 ```
-
-Move command:
-
-``` json
-{
-  "new_parent_id": "...",
-  "position": 3,
-  "expected_revision": 7
-}
-```
-
-Backend must reject cycles.
 
 # 11. Cards
 

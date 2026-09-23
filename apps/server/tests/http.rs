@@ -317,6 +317,55 @@ async fn project_route_struct_extraction_ignores_extra_route_parameters()
     Ok(())
 }
 
+// Step 18 pins the same contract for the NEW four-field route shape:
+// SectionContext's SectionRoute must keep extracting by field name on the
+// future five-parameter routes (.../sections/{s}/work-items/{w}), so adding
+// Work Items cannot break section resolution.
+#[tokio::test]
+async fn section_route_struct_extraction_ignores_extra_route_parameters()
+-> Result<(), Box<dyn std::error::Error>> {
+    #[derive(serde::Deserialize)]
+    struct SectionRoute {
+        organization_id: String,
+        workspace_id: String,
+        project_id: String,
+        section_id: String,
+    }
+    async fn deep_handler(
+        axum::extract::Path(route): axum::extract::Path<SectionRoute>,
+    ) -> axum::Json<serde_json::Value> {
+        axum::Json(serde_json::json!({
+            "organization_id": route.organization_id,
+            "workspace_id": route.workspace_id,
+            "project_id": route.project_id,
+            "section_id": route.section_id,
+        }))
+    }
+    let router = axum::Router::new().route(
+        "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}",
+        axum::routing::get(deep_handler),
+    );
+    let response = router
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/organizations/org-1/workspaces/ws-1/projects/prj-1/sections/sec-1/work-items/wi-1")
+                .body(Body::empty())?,
+        )
+        .await?;
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "four-field struct extraction must succeed on a five-parameter route"
+    );
+    let bytes = to_bytes(response.into_body(), 4096).await?;
+    let body: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(body["organization_id"], "org-1");
+    assert_eq!(body["workspace_id"], "ws-1");
+    assert_eq!(body["project_id"], "prj-1");
+    assert_eq!(body["section_id"], "sec-1");
+    Ok(())
+}
+
 #[tokio::test]
 async fn rbac_catalog_endpoints_reject_unauthenticated_requests()
 -> Result<(), Box<dyn std::error::Error>> {

@@ -42,7 +42,9 @@ test('projects: owner creates a project from the workspace modules and manages i
   await expect(page).toHaveURL(/\/projects\/[a-f0-9-]+$/, { timeout: 10_000 });
   await expect(page.getByRole('heading', { name: 'İlk Proje' })).toBeVisible();
   await expect(page.getByText('Aktif')).toBeVisible();
-  await expect(page.getByText('Bölümler sonraki bir aşamada buraya eklenecek.')).toBeVisible();
+  // Step 18 replaced the sections placeholder with the real panel; a fresh
+  // project shows its empty state.
+  await expect(page.getByRole('heading', { name: 'Bu projede henüz bölüm yok' })).toBeVisible();
 
   // A full reload re-resolves the SAME valid deep link through SSR: URL
   // context survives and the detail re-renders (URL authority, ADR 0011).

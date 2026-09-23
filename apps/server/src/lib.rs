@@ -10,6 +10,7 @@ pub mod password;
 pub mod permissions;
 pub mod projects;
 pub mod rbac;
+pub mod sections;
 pub mod users;
 pub mod workspaces;
 
@@ -133,6 +134,14 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/effective-permissions",
             get(permissions::effective_workspace_permissions),
         )
+        .route(
+            "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections",
+            post(sections::create_section_handler).get(sections::list_sections),
+        )
+        .route(
+            "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}",
+            get(sections::get_section).patch(sections::update_section_handler),
+        )
         .fallback(not_found)
         .method_not_allowed_fallback(method_not_allowed)
         .layer(middleware::from_fn(request_context))
@@ -220,6 +229,10 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         projects::list_projects,
         projects::get_project,
         projects::update_project_handler,
+        sections::create_section_handler,
+        sections::list_sections,
+        sections::get_section,
+        sections::update_section_handler,
         permissions::effective_workspace_permissions,
         organizations::list_permissions,
         organizations::list_roles,
@@ -250,6 +263,11 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         projects::ProjectPublic,
         projects::ProjectMutationResponse,
         projects::ProjectListResponse,
+        sections::CreateSectionRequest,
+        sections::UpdateSectionRequest,
+        sections::SectionPublic,
+        sections::SectionMutationResponse,
+        sections::SectionListResponse,
         organizations::PermissionPublic,
         organizations::PermissionListResponse,
         organizations::RolePublic,

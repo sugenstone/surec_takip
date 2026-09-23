@@ -50,13 +50,16 @@ pub async fn bootstrap_builtin_roles(
     // Grants reference the permission catalog by stable key. Extending the
     // grant list is a deliberate bootstrap decision, never automatic flow
     // (ADR 0008: Owner does not implicitly gain future permissions). The
-    // project keys mirror the 007_projects migration backfill (ADR 0011).
+    // project/section keys mirror the 007/008 migration backfills.
     for key in [
         WORKSPACES_CREATE.0,
         crate::invitations::MEMBERS_INVITE.0,
         crate::projects::PROJECTS_CREATE.0,
         crate::projects::PROJECTS_UPDATE.0,
         crate::projects::PROJECTS_ARCHIVE.0,
+        crate::sections::SECTIONS_CREATE.0,
+        crate::sections::SECTIONS_UPDATE.0,
+        crate::sections::SECTIONS_ARCHIVE.0,
     ] {
         sqlx::query(
             "INSERT INTO role_permissions (role_id, permission_id, scope) \

@@ -5,7 +5,7 @@ use axum::{
 use platform_server::{
     AppState,
     config::AuthConfig,
-    migrations::{self, MIGRATOR},
+    migrations::MIGRATOR,
     password::PasswordService,
     projects::{self, NewProject, PROJECTS_CREATE, ProjectError, ProjectPatch},
     router,
@@ -1271,8 +1271,21 @@ async fn migration_backfills_owner_grants_without_assigning_owner_roles(
     let org = create_org_via_api(app.clone(), &token, "Backfill Org").await;
 
     // Roles exist WITHOUT any project grant once 007 is reverted — the exact
-    // state a pre-007 organization is in when the migration first runs.
-    migrations::revert_last(&pool).await?;
+    // state a pre-007 organization is in when the migration first runs. The
+    // pre-007 version is located BY NAME so later migrations (e.g.
+    // 008_sections) cannot shift a positional revert target.
+    let up_migrations: Vec<(i64, std::borrow::Cow<'_, str>)> = MIGRATOR
+        .iter()
+        .filter(|m| !m.migration_type.is_down_migration())
+        .map(|m| (m.version, m.description.clone()))
+        .collect();
+    let projects_index = up_migrations
+        .iter()
+        .position(|(_, description)| description.contains("projects"))
+        .unwrap_or_else(|| panic!("the projects migration must exist in the chain"));
+    MIGRATOR
+        .undo(&pool, up_migrations[projects_index - 1].0)
+        .await?;
     let grant_count: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM role_permissions rp JOIN permissions p ON p.id = rp.permission_id \
          WHERE rp.role_id IN (SELECT id FROM roles WHERE tenant_id = $1) AND p.key LIKE 'projects:%'",

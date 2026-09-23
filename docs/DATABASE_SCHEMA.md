@@ -272,6 +272,46 @@ INDEX (workspace_id, created_at DESC, id)  -- list hot path
 
 ### sections
 
+Implemented by migration `008_sections` (ADR 0012). ONE generic recursive
+entity — "Block/Floor/Apartment" are user-chosen names, never types.
+Adjacency-list parenting with composite-FK integrity: a stored parent always
+carries the same tenant/workspace/project triple as its child.
+
+``` text
+id uuid PK
+tenant_id
+workspace_id
+project_id
+parent_section_id NULL          -- NULL = root section (no fake hidden root row)
+name text (1..200)
+slug citext (1..64)
+position integer NOT NULL CHECK (>= 0)   -- sibling order; NOT unique per
+                                          -- (parent, position): deterministic
+                                          -- order is (position, id)
+status text NOT NULL default 'active'
+  CHECK (status IN ('active','archived')) -- structural lifecycle only
+created_at / updated_at / deleted_at
+FOREIGN KEY (tenant_id, workspace_id, project_id)
+  REFERENCES projects (tenant_id, workspace_id, id)
+  -- (008 also adds projects UNIQUE (tenant_id, workspace_id, id) as the
+  --  FK target — the 004 workspaces pattern)
+FOREIGN KEY (tenant_id, workspace_id, project_id, parent_section_id)
+  REFERENCES sections (tenant_id, workspace_id, project_id, id)
+  -- cross-project/cross-tenant parenting is unstorable
+UNIQUE (project_id, parent_section_id, slug) WHERE parent_section_id IS NOT NULL
+UNIQUE (project_id, slug)              WHERE parent_section_id IS NULL
+  -- sibling-scoped, case-insensitive (citext), hard
+INDEX (project_id, parent_section_id, position, id)  -- flat tree query
+```
+
+Historical note: the earlier conceptual sketch in this section described an
+adjacency list with `position numeric/int` and `(tenant_id, project_id,
+parent_id, position)` indexes; the implemented V1 (ADR 0012) follows it with
+the constraints above and no progress/revision columns (Sections carry no
+executable work yet).
+
+### sections (conceptual, superseded by 008 — kept for history)
+
 Use adjacency-list hierarchy initially.
 
 ``` text

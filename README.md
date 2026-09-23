@@ -28,6 +28,7 @@ Starter extraction gate değerlendirmesi sıradaki adımdır.
 - [User invitations](docs/decisions/0009-user-invitations.md)
 - [Minimal app shell](docs/decisions/0010-minimal-app-shell.md)
 - [Project domain foundation](docs/decisions/0011-project-domain-foundation.md)
+- [Sections / recursive hierarchy](docs/decisions/0012-sections-recursive-hierarchy.md)
 
 ## Mevcut yapı
 
@@ -190,6 +191,25 @@ permission-aware create formu; detay sayfası düzenleme + yaşam döngüsü
 kontrolleri ve gelecekteki Bölümler için yer tutucu. DELETE/restore
 endpoint'i, ürün semantiği tanımlanana kadar ertelendi.
 
+## Bölümler (Sections)
+
+Projelerin içinde genel amaçlı, keyfi derinlikte bölüm hiyerarşisi (ADR
+0012): "Blok", "Kat", "Daire", "Bölge" yalnız kullanıcı seçimi isimlerdir —
+tip/kolon DEĞİLDİR. Route: `.../projects/{p}/sections[/{s}]`; SectionContext
+tüm üst zinciri (org → ws → project) tekil çözümde kanıtlar, yanlış-parent
+uniform 404. DB: kompozit self-FK ebeveynin aynı tenant/workspace/project
+üçlüsünü taşımasını ZORUNLU kılar (cross-project parenting depolanamaz);
+döngü (self + torun-ebeveyn) mutasyon transaction'ında recursive CTE ile
+reddedilir — aynı projenin mutasyonları projects satır kilidiyle serileşir.
+Ağaç yanıtı DÜZ ve deterministik sıralı tek sorgudur (N+1 yok); istemci
+ağacı bellekte kurar (güvenli kurucu, bozuk girdi toleranslı). Sıralama
+integer `position` primitive'ı (drag/drop ve gelecek bulk üretim aynı
+primitive'ı kullanır; `(position, id)` deterministik). Slug tekliği kardeş
+kapsamındadır. Yaşam döngüsü yapısal `active|archived`; arşiv yalnız
+`sections:archive` yetkiyle. DELETE/bulk üretim ertelendi. UI: proje detay
+sayfasında izin-farkındalıklı ağaç paneli (ekle/alt ekle/yeniden
+adlandır/taşı/köke taşı/yukarı-aşağı/arşivle).
+
 ## Dil ve tema foundation
 
 Çeviri anahtarları `apps/web/src/lib/i18n` altında; Svelte metinleri sözlükten
@@ -237,7 +257,9 @@ role_permissions/membership_roles + composite FK'ler + pre-RBAC org'lar
 için (ADR 0008); `006` invitations + `members:invite` + Owner grant (ADR
 0009); `007` projects — workspace-scoped ilk ürün domain tablosu, composite
 FK + slug/status CHECK'leri + `projects:*` izinleri ve Owner grant backfill
-(ADR 0011). SQLx
+(ADR 0011); `008` sections — genel recursive hiyerarşi, composite self-FK +
+kardeş-kapsamı slug partial unique + `sections:*` izinleri ve Owner grant
+backfill (ADR 0012). SQLx
 `_sqlx_migrations` tablosunda version/checksum tutar. Uygulanmış SQL dosyası
 sonradan değiştirilmez; yeni migration eklenir. Dosyalar LF satır sonuyla tutulur.
 

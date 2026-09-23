@@ -11,6 +11,7 @@ use crate::{
     error::{ApiError, ErrorCode},
     organizations::{self, OrganizationRow},
     projects::{self, ProjectRow},
+    sections::{self, SectionRow},
     workspaces::{self, WorkspaceRow},
 };
 use axum::extract::{FromRequestParts, Path};
@@ -38,6 +39,14 @@ struct ProjectRoute {
     organization_id: String,
     workspace_id: String,
     project_id: String,
+}
+
+#[derive(Deserialize)]
+struct SectionRoute {
+    organization_id: String,
+    workspace_id: String,
+    project_id: String,
+    section_id: String,
 }
 
 /// Organization-scoped tenant context.
@@ -235,6 +244,98 @@ impl FromRequestParts<AppState> for ProjectContext {
                 workspace_id: workspace.id,
                 project_id: project.id,
                 project,
+            }),
+            None => Err(not_found()),
+        }
+    }
+}
+
+/// Section-scoped tenant context (step 18, ADR 0012). Only constructible
+/// when the FULL parent chain holds: the ProjectContext invariant AND the
+/// section belonging to the resolved project AND not soft-deleted. The
+/// route parent chain stays authoritative — a section id alone never
+/// resolves anything. Resolves request ELIGIBILITY only; mutations re-prove
+/// everything inside their transaction.
+#[derive(Clone)]
+pub struct SectionContext {
+    pub user_id: Uuid,
+    pub tenant_id: Uuid,
+    pub organization_id: Uuid,
+    pub workspace_id: Uuid,
+    pub project_id: Uuid,
+    pub section_id: Uuid,
+    pub section: SectionRow,
+}
+
+impl FromRequestParts<AppState> for SectionContext {
+    type Rejection = ApiError;
+
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let current = auth::resolve_current_user(parts, state).await?;
+        let path = Path::<SectionRoute>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| not_found(parts))?;
+        let SectionRoute {
+            organization_id: raw_organization,
+            workspace_id: raw_workspace,
+            project_id: raw_project,
+            section_id: raw_section,
+        } = path.0;
+        let not_found = || not_found(parts);
+        // Malformed ids resolve exactly like unknown ones.
+        let Ok(organization_id) = raw_organization.parse::<Uuid>() else {
+            return Err(not_found());
+        };
+        let Ok(workspace_id) = raw_workspace.parse::<Uuid>() else {
+            return Err(not_found());
+        };
+        let Ok(project_id) = raw_project.parse::<Uuid>() else {
+            return Err(not_found());
+        };
+        let Ok(section_id) = raw_section.parse::<Uuid>() else {
+            return Err(not_found());
+        };
+        // Parent chain first (same authoritative queries as ProjectContext),
+        // then the section scoped to the resolved project in one query.
+        let workspace = workspaces::find_accessible(
+            &state.pool,
+            organization_id,
+            workspace_id,
+            current.user.id,
+        )
+        .await
+        .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id_of(parts)))?;
+        let Some(workspace) = workspace else {
+            return Err(not_found());
+        };
+        let project =
+            projects::find_accessible(&state.pool, organization_id, workspace_id, project_id)
+                .await
+                .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id_of(parts)))?;
+        let Some(project) = project else {
+            return Err(not_found());
+        };
+        let section = sections::find_accessible(
+            &state.pool,
+            organization_id,
+            workspace_id,
+            project_id,
+            section_id,
+        )
+        .await
+        .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id_of(parts)))?;
+        match section {
+            Some(section) => Ok(SectionContext {
+                user_id: current.user.id,
+                tenant_id: workspace.organization_id,
+                organization_id: workspace.organization_id,
+                workspace_id: workspace.id,
+                project_id: project.id,
+                section_id: section.id,
+                section,
             }),
             None => Err(not_found()),
         }

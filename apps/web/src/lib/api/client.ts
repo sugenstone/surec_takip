@@ -77,6 +77,8 @@ export type OrganizationPublic = components['schemas']['OrganizationPublic'];
 export type WorkspacePublic = components['schemas']['WorkspacePublic'];
 export type ProjectPublic = components['schemas']['ProjectPublic'];
 export type ProjectStatus = ProjectPublic['status'];
+export type SectionPublic = components['schemas']['SectionPublic'];
+export type SectionStatus = SectionPublic['status'];
 export type MeData = components['schemas']['MeData'];
 
 export async function loginRequest(email: string, password: string): Promise<SessionUser> {
@@ -162,6 +164,62 @@ export async function updateProject(
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(input),
+    },
+  );
+  return body.data;
+}
+
+export async function listSections(
+  organizationId: string,
+  workspaceId: string,
+  projectId: string,
+): Promise<SectionPublic[]> {
+  const body = await request<{ data: SectionPublic[] }>(
+    `/api/v1/organizations/${organizationId}/workspaces/${workspaceId}/projects/${projectId}/sections`,
+  );
+  return body.data;
+}
+
+export async function createSection(
+  organizationId: string,
+  workspaceId: string,
+  projectId: string,
+  input: { name: string; parentSectionId?: string | null },
+): Promise<SectionPublic> {
+  const body = await request<{ data: SectionPublic }>(
+    `/api/v1/organizations/${organizationId}/workspaces/${workspaceId}/projects/${projectId}/sections`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: input.name, parent_section_id: input.parentSectionId ?? null }),
+    },
+  );
+  return body.data;
+}
+
+export async function updateSection(
+  organizationId: string,
+  workspaceId: string,
+  projectId: string,
+  sectionId: string,
+  input: {
+    name?: string;
+    parentSectionId?: string | null;
+    position?: number;
+    status?: SectionStatus;
+  },
+): Promise<SectionPublic> {
+  const patch: Record<string, unknown> = {};
+  if (input.name !== undefined) patch.name = input.name;
+  if (input.parentSectionId !== undefined) patch.parent_section_id = input.parentSectionId;
+  if (input.position !== undefined) patch.position = input.position;
+  if (input.status !== undefined) patch.status = input.status;
+  const body = await request<{ data: SectionPublic }>(
+    `/api/v1/organizations/${organizationId}/workspaces/${workspaceId}/projects/${projectId}/sections/${sectionId}`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(patch),
     },
   );
   return body.data;

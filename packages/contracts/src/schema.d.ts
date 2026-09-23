@@ -283,6 +283,38 @@ export interface paths {
         patch: operations["update_project_handler"];
         trace?: never;
     };
+    "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_sections"];
+        put?: never;
+        post: operations["create_section_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_section"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["update_section_handler"];
+        trace?: never;
+    };
     "/api/v1/ready": {
         parameters: {
             query?: never;
@@ -351,6 +383,15 @@ export interface components {
         CreateProjectRequest: {
             description?: string | null;
             name: string;
+            slug?: string | null;
+        };
+        CreateSectionRequest: {
+            name: string;
+            /**
+             * Format: uuid
+             * @description Optional parent; omitted or null creates a ROOT section.
+             */
+            parent_section_id?: string | null;
             slug?: string | null;
         };
         CreateWorkspaceData: {
@@ -488,6 +529,34 @@ export interface components {
             name: string;
         };
         /**
+         * @description Flat ordered list (ADR 0012): one query per project, siblings pre-sorted;
+         *     clients assemble the tree in memory. Deliberately NOT a nested recursive
+         *     DTO — codegen ergonomics and future move/reorder stability win.
+         */
+        SectionListResponse: {
+            data: components["schemas"]["SectionPublic"][];
+        };
+        SectionMutationResponse: {
+            data: components["schemas"]["SectionPublic"];
+        };
+        SectionPublic: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** Format: uuid */
+            organization_id: string;
+            /** Format: uuid */
+            parent_section_id?: string | null;
+            /** Format: int32 */
+            position: number;
+            /** Format: uuid */
+            project_id: string;
+            slug: string;
+            status: string;
+            /** Format: uuid */
+            workspace_id: string;
+        };
+        /**
          * @description Ownership (tenant/workspace) and lifecycle authority never enter the body:
          *     scope comes from the authenticated session plus the route, and new
          *     projects always start `active` (ADR 0011).
@@ -496,6 +565,21 @@ export interface components {
             /** @description Empty string clears the stored description. */
             description?: string | null;
             name?: string | null;
+            slug?: string | null;
+            status?: string | null;
+        };
+        UpdateSectionRequest: {
+            name?: string | null;
+            /**
+             * Format: uuid
+             * @description Absent = keep; null = become a root section; UUID = reparent.
+             */
+            parent_section_id?: string | null;
+            /**
+             * Format: int32
+             * @description Sibling order; ignored when absent (a reparent appends instead).
+             */
+            position?: number | null;
             slug?: string | null;
             status?: string | null;
         };
@@ -1403,6 +1487,218 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectMutationResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_sections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent organization id */
+                organization_id: string;
+                /** @description Parent workspace id */
+                workspace_id: string;
+                /** @description Parent project id */
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionListResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    create_section_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent organization id */
+                organization_id: string;
+                /** @description Parent workspace id */
+                workspace_id: string;
+                /** @description Parent project id */
+                project_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSectionRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionMutationResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_section: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent organization id */
+                organization_id: string;
+                /** @description Parent workspace id */
+                workspace_id: string;
+                /** @description Parent project id */
+                project_id: string;
+                /** @description Section id */
+                section_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionPublic"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    update_section_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent organization id */
+                organization_id: string;
+                /** @description Parent workspace id */
+                workspace_id: string;
+                /** @description Parent project id */
+                project_id: string;
+                /** @description Section id */
+                section_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateSectionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SectionMutationResponse"];
                 };
             };
             401: {
