@@ -1,29 +1,82 @@
 <script lang="ts">
+  // Professional application shell (ADR 0014, STEP 19.5C):
+  // persistent sidebar (brand, context selection, primary navigation,
+  // account) + slim topbar (mobile navigation trigger, global utilities).
+  // Below 768px the sidebar becomes an off-canvas drawer; the URL stays the
+  // single source of navigation truth — the drawer only surfaces links.
+  import { onMount } from 'svelte';
+  import { afterNavigate } from '$app/navigation';
+  import { navigating, page } from '$app/state';
+  import type { Theme } from '$lib/theme';
   import { translate } from '$lib/i18n';
   import { resolve } from '$app/paths';
+  import Icon from '$lib/ui/Icon.svelte';
 
   let {
     locale,
+    theme,
     organizations,
     currentOrganizationId,
     workspaces = [],
     currentWorkspaceId = null,
-    permissions = [],
     user,
     children,
   }: {
-    locale: string;
+    locale: 'tr-TR' | 'en';
+    theme: Theme;
     organizations: { id: string; name: string; slug: string }[];
     currentOrganizationId: string;
     workspaces?: { id: string; name: string; slug: string; organization_id: string }[];
     currentWorkspaceId?: string | null;
-    permissions?: string[];
     user: { display_name: string; email: string } | null;
     children: import('svelte').Snippet;
   } = $props();
 
   let navOpen = $state(false);
-  const canCreateWorkspace = $derived(permissions.includes('workspaces:create'));
+  let ready = $state(false);
+  let sidebarElement = $state<HTMLElement>();
+  let navToggle = $state<HTMLButtonElement>();
+  onMount(() => {
+    ready = true;
+  });
+  const inProjects = $derived(page.url.pathname.includes('/projects'));
+  const inOrgHome = $derived(page.url.pathname === `/app/${currentOrganizationId}`);
+  const initials = $derived(
+    (user?.display_name ?? '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0]?.toLocaleUpperCase(locale) ?? '')
+      .join(''),
+  );
+  afterNavigate(() => {
+    navOpen = false;
+  });
+
+  function closeNav(refocus = false) {
+    navOpen = false;
+    if (refocus) navToggle?.focus();
+  }
+
+  // Drawer open state (mobile only): focus moves into the drawer, Escape and
+  // page scroll lock apply, and cleanup restores the previous state.
+  $effect(() => {
+    if (!navOpen) return;
+    sidebarElement?.querySelector<HTMLElement>('.drawer-close')?.focus();
+    const onKeydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeNav(true);
+      }
+    };
+    window.addEventListener('keydown', onKeydown);
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      window.removeEventListener('keydown', onKeydown);
+      document.body.style.overflow = previousOverflow;
+    };
+  });
 
   function switchOrg(event: Event) {
     const target = event.currentTarget as HTMLSelectElement;
@@ -57,281 +110,162 @@
   }
 </script>
 
-<a class="skip-link" href="#main-content"
-  >{translate(locale as 'tr-TR' | 'en', 'navigation.skip')}</a
->
+<a class="skip-link" href="#main-content">{translate(locale, 'navigation.skip')}</a>
 
-<header class="shell-header" role="banner">
-  <button
-    type="button"
-    class="nav-toggle"
-    aria-expanded={navOpen}
-    aria-label={translate(locale as 'tr-TR' | 'en', 'shell.nav.toggle')}
-    onclick={() => (navOpen = !navOpen)}
-  >
-    <span class="nav-toggle-bar"></span>
-    <span class="nav-toggle-bar"></span>
-    <span class="nav-toggle-bar"></span>
-  </button>
+<div class="shell">
+  <aside bind:this={sidebarElement} id="app-sidebar" class="app-sidebar" class:open={navOpen}>
+    <a class="brand" href={resolve('/app')}>
+      <span class="brand-mark"><Icon name="layers" size={16} /></span>
+      <span class="brand-name">{translate(locale, 'app.name')}</span>
+    </a>
 
-  <nav
-    class="shell-nav"
-    class:open={navOpen}
-    aria-label={translate(locale as 'tr-TR' | 'en', 'shell.nav.label')}
-  >
-    <ul class="nav-list">
-      <li>
-        <a href={resolve(`/app/${currentOrganizationId}`)} class="nav-link"
-          >{translate(locale as 'tr-TR' | 'en', 'shell.nav.home')}</a
-        >
-      </li>
-    </ul>
-  </nav>
+    <div class="sidebar-context">
+      <span class="context-title">{translate(locale, 'shell.context')}</span>
+      <div class="sidebar-field">
+        <label for="org-switcher-shell">{translate(locale, 'org.switcher.label')}</label>
+        <div class="select-wrap">
+          <select
+            id="org-switcher-shell"
+            disabled={!ready}
+            value={currentOrganizationId}
+            onchange={switchOrg}
+          >
+            {#each organizations as org (org.id)}
+              <option value={org.id}>{org.name}</option>
+            {/each}
+          </select>
+          <Icon name="chevron-down" size={16} />
+        </div>
+      </div>
 
-  <div class="switchers">
-    <label class="switcher-label" for="org-switcher-shell">
-      {translate(locale as 'tr-TR' | 'en', 'org.switcher.label')}
-    </label>
-    <select
-      id="org-switcher-shell"
-      class="switcher"
-      value={currentOrganizationId}
-      onchange={switchOrg}
-    >
-      {#each organizations as org (org.id)}
-        <option value={org.id}>{org.name}</option>
-      {/each}
-    </select>
+      {#if workspaces.length > 0}
+        <div class="sidebar-field">
+          <label for="ws-switcher-shell">{translate(locale, 'workspace.switcher.label')}</label>
+          <div class="select-wrap">
+            <select
+              id="ws-switcher-shell"
+              disabled={!ready}
+              value={currentWorkspaceId ?? ''}
+              onchange={switchWs}
+            >
+              <option value="" disabled>{translate(locale, 'ui.workspace.choose')}</option>
+              {#each workspaces as ws (ws.id)}
+                <option value={ws.id}>{ws.name}</option>
+              {/each}
+            </select>
+            <Icon name="chevron-down" size={16} />
+          </div>
+        </div>
+      {/if}
+    </div>
 
-    {#if workspaces.length > 0}
-      <label class="switcher-label" for="ws-switcher-shell">
-        {translate(locale as 'tr-TR' | 'en', 'workspace.switcher.label')}
-      </label>
-      <select
-        id="ws-switcher-shell"
-        class="switcher"
-        value={currentWorkspaceId ?? ''}
-        onchange={switchWs}
-      >
-        {#each workspaces as ws (ws.id)}
-          <option value={ws.id}>{ws.name}</option>
-        {/each}
-      </select>
-    {/if}
-  </div>
+    <nav class="side-nav" aria-label={translate(locale, 'shell.nav.label')}>
+      <ul>
+        <li>
+          <a
+            href={resolve(`/app/${currentOrganizationId}`)}
+            class="nav-item"
+            aria-current={inOrgHome ? 'page' : undefined}
+            ><Icon name="layout-grid" size={18} />{translate(locale, 'workspace.title')}</a
+          >
+        </li>
+        {#if currentWorkspaceId}
+          <li>
+            <a
+              class="nav-item"
+              aria-current={inProjects ? 'page' : undefined}
+              href={resolve(`/app/${currentOrganizationId}/${currentWorkspaceId}/projects`)}
+              ><Icon name="folder" size={18} />{translate(locale, 'projects.title')}</a
+            >
+          </li>
+        {/if}
+      </ul>
+    </nav>
 
-  <div class="account">
-    {#if user}<span class="account-name">{user.display_name}</span>{/if}
-    <div class="account-controls">
-      <label class="sr-only" for="locale-select"
-        >{translate(locale as 'tr-TR' | 'en', 'shell.account.language')}</label
-      >
-      <select
-        id="locale-select"
-        class="mini-select"
-        value={locale}
-        onchange={(e) => setLocale((e.currentTarget as HTMLSelectElement).value)}
-      >
-        <option value="tr-TR">Türkçe</option>
-        <option value="en">English</option>
-      </select>
-      <label class="sr-only" for="theme-select"
-        >{translate(locale as 'tr-TR' | 'en', 'shell.account.theme')}</label
-      >
-      <select
-        id="theme-select"
-        class="mini-select"
-        onchange={(e) => setTheme((e.currentTarget as HTMLSelectElement).value)}
-      >
-        <option value="light">{translate(locale as 'tr-TR' | 'en', 'shell.theme.light')}</option>
-        <option value="dark">{translate(locale as 'tr-TR' | 'en', 'shell.theme.dark')}</option>
-        <option value="system">{translate(locale as 'tr-TR' | 'en', 'shell.theme.system')}</option>
-      </select>
-      <button type="button" class="logout" onclick={signOut}>
-        {translate(locale as 'tr-TR' | 'en', 'auth.logout')}
+    <div class="sidebar-footer">
+      {#if user}
+        <div class="user-block">
+          <span class="avatar" aria-hidden="true">{initials}</span>
+          <div class="user-meta">
+            <span class="user-name">{user.display_name}</span>
+            <span class="user-email">{user.email}</span>
+          </div>
+        </div>
+      {/if}
+      <button type="button" class="logout-button" disabled={!ready} onclick={signOut}>
+        <Icon name="log-out" size={18} />{translate(locale, 'auth.logout')}
       </button>
     </div>
+
+    <button
+      type="button"
+      class="icon-btn drawer-close"
+      aria-label={translate(locale, 'ui.close')}
+      onclick={() => closeNav(true)}
+    >
+      <Icon name="x" size={20} />
+    </button>
+  </aside>
+  {#if navOpen}<button
+      type="button"
+      class="drawer-backdrop"
+      aria-label={translate(locale, 'ui.close')}
+      tabindex="-1"
+      onclick={() => closeNav()}
+    ></button>{/if}
+
+  <div class="shell-body">
+    <header class="topbar">
+      <button
+        bind:this={navToggle}
+        type="button"
+        class="nav-toggle"
+        disabled={!ready}
+        aria-expanded={navOpen}
+        aria-controls="app-sidebar"
+        aria-label={translate(locale, 'shell.nav.toggle')}
+        onclick={() => (navOpen = !navOpen)}
+      >
+        <Icon name="menu" size={22} />
+      </button>
+      <div class="topbar-utils">
+        <label class="sr-only" for="locale-select"
+          >{translate(locale, 'shell.account.language')}</label
+        >
+        <div class="select-wrap">
+          <select
+            id="locale-select"
+            disabled={!ready}
+            value={locale}
+            onchange={(e) => setLocale((e.currentTarget as HTMLSelectElement).value)}
+          >
+            <option value="tr-TR">Türkçe</option>
+            <option value="en">English</option>
+          </select>
+          <Icon name="chevron-down" size={16} />
+        </div>
+        <label class="sr-only" for="theme-select">{translate(locale, 'shell.account.theme')}</label>
+        <div class="select-wrap">
+          <select
+            id="theme-select"
+            disabled={!ready}
+            value={theme}
+            onchange={(e) => setTheme((e.currentTarget as HTMLSelectElement).value)}
+          >
+            <option value="light">{translate(locale, 'shell.theme.light')}</option>
+            <option value="dark">{translate(locale, 'shell.theme.dark')}</option>
+            <option value="system">{translate(locale, 'shell.theme.system')}</option>
+          </select>
+          <Icon name="chevron-down" size={16} />
+        </div>
+      </div>
+    </header>
+
+    <main id="main-content" class="app-content" tabindex="-1" aria-busy={!!navigating.to}>
+      {#if navigating.to}<p class="navigation-loading" role="status">
+          {translate(locale, 'ui.loading')}
+        </p>{/if}
+      {@render children()}
+    </main>
   </div>
-</header>
-
-{#if canCreateWorkspace && workspaces.length === 0 && currentOrganizationId}
-  <!-- permission-aware empty state is handled by the org page -->
-{/if}
-
-<main id="main-content" tabindex="-1">
-  {@render children()}
-</main>
-
-<style>
-  .skip-link {
-    position: fixed;
-    inset-block-start: var(--space-2);
-    inset-inline-start: var(--space-2);
-    padding: var(--space-3);
-    background: var(--surface);
-    transform: translateY(-200%);
-    z-index: 100;
-  }
-  .skip-link:focus {
-    transform: none;
-  }
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-  }
-  .shell-header {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    padding: var(--space-3) var(--space-4);
-    border-bottom: 1px solid var(--border);
-    background: var(--surface);
-    flex-wrap: wrap;
-    min-height: 56px;
-  }
-  .nav-toggle {
-    display: none;
-    flex-direction: column;
-    gap: 4px;
-    background: none;
-    border: none;
-    padding: var(--space-2);
-    cursor: pointer;
-    min-width: 44px;
-    min-height: 44px;
-  }
-  .nav-toggle-bar {
-    display: block;
-    width: 20px;
-    height: 2px;
-    background: var(--foreground);
-    border-radius: 1px;
-  }
-  .shell-nav ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    gap: var(--space-4);
-  }
-  .nav-link {
-    color: var(--foreground);
-    text-decoration: none;
-    font-weight: 500;
-    padding: var(--space-2) var(--space-1);
-  }
-  .nav-link:hover {
-    color: var(--primary);
-  }
-  .switchers {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    margin-inline-start: auto;
-    flex-wrap: wrap;
-  }
-  .switcher-label {
-    color: var(--muted-foreground);
-    font-size: var(--text-small);
-  }
-  .switcher {
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    color: var(--foreground);
-    font: inherit;
-    font-size: var(--text-small);
-    padding: var(--space-2);
-    min-height: 40px;
-    max-width: 14rem;
-  }
-  .account {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
-  .account-name {
-    font-weight: 600;
-    font-size: var(--text-small);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 10rem;
-  }
-  .account-controls {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-  }
-  .mini-select {
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
-    background: var(--surface);
-    color: var(--foreground);
-    font-size: var(--text-caption);
-    padding: var(--space-1) var(--space-2);
-    min-height: 36px;
-  }
-  .logout {
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    color: var(--foreground);
-    font: inherit;
-    font-size: var(--text-small);
-    padding: var(--space-2) var(--space-3);
-    min-height: 36px;
-    cursor: pointer;
-  }
-  .logout:hover {
-    background: var(--surface-muted);
-  }
-  main {
-    padding: var(--space-6);
-    min-height: calc(100vh - 56px);
-  }
-  @media (max-width: 768px) {
-    .nav-toggle {
-      display: flex;
-    }
-    .shell-nav {
-      display: none;
-      position: absolute;
-      top: 56px;
-      left: 0;
-      right: 0;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      padding: var(--space-4);
-      z-index: 50;
-    }
-    .shell-nav.open {
-      display: block;
-    }
-    .shell-nav ul {
-      flex-direction: column;
-      gap: var(--space-2);
-    }
-    .switchers {
-      margin-inline-start: 0;
-      width: 100%;
-      order: 3;
-    }
-    .switcher {
-      flex: 1;
-      max-width: none;
-    }
-    .account {
-      margin-inline-start: auto;
-    }
-    .account-name {
-      display: none;
-    }
-    main {
-      padding: var(--space-4);
-    }
-  }
-</style>
+</div>

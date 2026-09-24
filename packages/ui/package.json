@@ -4,6 +4,12 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./tokens.css": "./src/tokens.css"
+    "./tokens.css": "./src/tokens.css",
+    "./PageHeader.svelte": "./src/PageHeader.svelte",
+    "./StatusBadge.svelte": "./src/StatusBadge.svelte",
+    "./EmptyState.svelte": "./src/EmptyState.svelte",
+    "./ConfirmDialog.svelte": "./src/ConfirmDialog.svelte",
+    "./FormDrawer.svelte": "./src/FormDrawer.svelte",
+    "./ActionMenu.svelte": "./src/ActionMenu.svelte"
   }
 }

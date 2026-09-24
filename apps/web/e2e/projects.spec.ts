@@ -24,21 +24,26 @@ test('projects: owner creates a project from the workspace modules and manages i
   await page.getByLabel('Organizasyon adı').fill('Projects Org');
   await page.getByRole('button', { name: 'Organizasyon oluştur' }).click();
   await expect(page).toHaveURL(/\/app\/[a-f0-9-]+$/, { timeout: 10_000 });
-  await page.getByLabel('Çalışma alanı adı').fill('Projects Ws');
   await page.getByRole('button', { name: 'Çalışma alanı oluştur' }).click();
+  await page.getByRole('dialog').getByLabel('Çalışma alanı adı').fill('Projects Ws');
+  await page.getByRole('dialog').getByRole('button', { name: 'Oluştur' }).click();
   await expect(page).toHaveURL(/\/app\/[a-f0-9-]+\/[a-f0-9-]+$/, { timeout: 10_000 });
 
   // Workspace home exposes the Projects module entry.
-  await page.getByRole('link', { name: /Projeler/ }).click();
+  await page
+    .getByRole('main')
+    .getByRole('link', { name: /Projeler/ })
+    .click();
   await expect(page).toHaveURL(/\/projects$/, { timeout: 10_000 });
   await expect(
     page.getByRole('heading', { name: 'Bu çalışma alanında henüz proje yok' }),
   ).toBeVisible();
 
-  // Owner (projects:create) sees the create form and uses it.
-  await page.getByLabel('Proje adı').fill('İlk Proje');
-  await page.getByLabel('Açıklama (isteğe bağlı)').fill('Uçtan uca deneme');
+  // Owner (projects:create) opens the create drawer and uses it.
   await page.getByRole('button', { name: 'Proje oluştur' }).click();
+  await page.getByRole('dialog').getByLabel('Proje adı').fill('İlk Proje');
+  await page.getByRole('dialog').getByLabel('Açıklama (isteğe bağlı)').fill('Uçtan uca deneme');
+  await page.getByRole('dialog').getByRole('button', { name: 'Oluştur' }).click();
   await expect(page).toHaveURL(/\/projects\/[a-f0-9-]+$/, { timeout: 10_000 });
   await expect(page.getByRole('heading', { name: 'İlk Proje' })).toBeVisible();
   await expect(page.getByText('Aktif')).toBeVisible();
@@ -52,22 +57,31 @@ test('projects: owner creates a project from the workspace modules and manages i
   await expect(page).toHaveURL(/\/projects\/[a-f0-9-]+$/, { timeout: 10_000 });
   await expect(page.getByRole('heading', { name: 'İlk Proje' })).toBeVisible();
 
-  // Owner (projects:update) edits content.
-  await page.getByRole('button', { name: 'Projeyi düzenle' }).click();
-  await page.getByLabel('Proje adı').fill('İlk Proje v2');
-  await page.getByRole('button', { name: 'Kaydet' }).click();
+  // Owner (projects:update) edits content through the action menu + drawer.
+  await page.getByRole('button', { name: 'İşlemler', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Projeyi düzenle' }).click();
+  await page.getByRole('dialog').getByLabel('Proje adı').fill('İlk Proje v2');
+  await page.getByRole('dialog').getByRole('button', { name: 'Kaydet' }).click();
   await expect(page.getByRole('heading', { name: 'İlk Proje v2' })).toBeVisible();
 
-  // Lifecycle: complete, archive (projects:archive), reactivate.
-  await page.getByRole('button', { name: 'Tamamlandı olarak işaretle' }).click();
+  // Lifecycle: complete, archive (projects:archive), reactivate — secondary
+  // actions live in the overflow menu; archive stays a destructive confirm.
+  await page.getByRole('button', { name: 'İşlemler', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Tamamlandı olarak işaretle' }).click();
   await expect(page.getByText('Tamamlandı').first()).toBeVisible();
-  await page.getByRole('button', { name: 'Arşivle' }).click();
+  await page.getByRole('button', { name: 'İşlemler', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Arşivle' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Arşivlemeyi onayla' }).click();
   await expect(page.getByText('Arşivlendi').first()).toBeVisible();
-  await page.getByRole('button', { name: 'Yeniden etkinleştir' }).click();
+  await page.getByRole('button', { name: 'İşlemler', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Yeniden etkinleştir' }).click();
   await expect(page.getByText('Aktif').first()).toBeVisible();
 
   // Back on the list, the project is reachable with its status.
-  await page.getByRole('link', { name: /←?\s*Projeler/ }).click();
+  await page
+    .getByRole('navigation', { name: 'Konum' })
+    .getByRole('link', { name: 'Projeler', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/projects$/, { timeout: 10_000 });
   await expect(page.getByRole('link', { name: /İlk Proje v2/ })).toBeVisible();
 });

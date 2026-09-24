@@ -19,9 +19,9 @@ describe('language foundation', () => {
     expect(translate('tr-TR', 'navigation.skip')).toBe('İçeriğe geç');
   });
   it('interpolates named placeholders and keeps unknown ones intact', () => {
-    expect(translate('tr-TR', 'home.welcome', { name: 'Ayşe' })).toBe('Merhaba, Ayşe');
-    expect(translate('en', 'home.welcome', { name: 'Ayşe' })).toBe('Hello, Ayşe');
-    expect(translate('en', 'home.welcome', { other: 'x' })).toBe('Hello, {name}');
+    expect(translate('tr-TR', 'sections.childCount', { count: '3' })).toBe('Alt bölüm: 3');
+    expect(translate('en', 'sections.childCount', { count: '3' })).toBe('Subsections: 3');
+    expect(translate('en', 'sections.childCount', { other: 'x' })).toBe('Subsections: {count}');
   });
   it('uses locale and explicit time zone formatting', () => {
     expect(formatNumber('tr-TR', 1250.5)).toBe('1.250,5');

@@ -40,7 +40,7 @@ export const load: PageServerLoad = async ({ params, parent, cookies, fetch }) =
     sections = ((await sectionsResponse.json()) as { data?: SectionPublic[] }).data ?? [];
   } else if (sectionsResponse.status !== 404) {
     // A 404 cannot happen here (the project resolved); connectivity issues
-    // surface as an explicit error state instead of a silently empty tree.
+    // surface as an explicit error state instead of a silently empty list.
     sectionsFailed = true;
   }
   return { project, sections, sectionsFailed };

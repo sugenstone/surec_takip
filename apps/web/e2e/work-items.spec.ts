@@ -20,23 +20,33 @@ test('work items: owner creates through the hierarchy and list persists', async 
   await page.getByLabel('Organizasyon adı').fill('Work Items Org');
   await page.getByRole('button', { name: 'Organizasyon oluştur' }).click();
   await expect(page).toHaveURL(/\/app\/[a-f0-9-]+$/);
-  await page.getByLabel('Çalışma alanı adı').fill('Work Items Ws');
   await page.getByRole('button', { name: 'Çalışma alanı oluştur' }).click();
+  await page.getByRole('dialog').getByLabel('Çalışma alanı adı').fill('Work Items Ws');
+  await page.getByRole('dialog').getByRole('button', { name: 'Oluştur' }).click();
   await expect(page).toHaveURL(/\/app\/[a-f0-9-]+\/[a-f0-9-]+$/);
-  await page.getByRole('link', { name: /Projeler/ }).click();
-  await page.getByLabel('Proje adı').fill('Work Project');
+  await page
+    .getByRole('main')
+    .getByRole('link', { name: /Projeler/ })
+    .click();
   await page.getByRole('button', { name: 'Proje oluştur' }).click();
+  await page.getByRole('dialog').getByLabel('Proje adı').fill('Work Project');
+  await page.getByRole('dialog').getByRole('button', { name: 'Oluştur' }).click();
   await expect(page).toHaveURL(/\/projects\/[a-f0-9-]+$/);
-  await page.getByLabel('Bölüm adı').fill('Work Section');
   await page.getByRole('button', { name: 'Bölüm ekle' }).click();
-  await page.getByRole('link', { name: 'İşçilik', exact: true }).click();
-  await expect(page.getByText('Bu bölümde henüz işçilik yok')).toBeVisible();
+  await page.getByRole('dialog').getByLabel('Bölüm adı').fill('Work Section');
+  await page.getByRole('dialog').getByRole('button', { name: 'Oluştur' }).click();
+  // Sections are navigation cards: entering the section opens its own page,
+  // which carries the work item list (drill-down, ADR 0014).
+  await page.getByRole('link', { name: 'Work Section', exact: true }).click();
+  await expect(page).toHaveURL(/\/sections\/[a-f0-9-]+$/);
+  await expect(page.getByText('Bu bölüm henüz boş')).toBeVisible();
   listUrl = page.url();
   const parts = new URL(listUrl).pathname.split('/');
   orgId = parts[2];
   apiPath = `/api/v1/organizations/${parts[2]}/workspaces/${parts[3]}/projects/${parts[5]}/sections/${parts[7]}/work-items`;
-  await page.getByLabel('İşçilik adı').fill('Inspection');
   await page.getByRole('button', { name: 'İşçilik ekle', exact: true }).click();
+  await page.getByRole('dialog').getByLabel('İşçilik adı').fill('Inspection');
+  await page.getByRole('dialog').getByRole('button', { name: 'Oluştur' }).click();
   await expect(page.getByRole('link', { name: 'Inspection', exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole('link', { name: 'Inspection', exact: true }).click();
@@ -131,6 +141,8 @@ test('work items: eligible member reads but cannot create edit or archive', asyn
   await page.goto(listUrl);
   await expect(page.getByRole('link', { name: 'Reserved', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'İşçilik ekle', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Alt bölüm ekle', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Bölümü düzenle', exact: true })).toHaveCount(0);
   const denied = await page.request.post(apiPath, { data: { name: 'Denied' } });
   expect(denied.status()).toBe(403);
   expect((await denied.json()).error.code).toBe('PERMISSION_DENIED');

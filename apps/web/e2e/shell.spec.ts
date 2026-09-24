@@ -27,8 +27,9 @@ test('shell onboarding: no-org state, create org, create workspace, land in shel
     page.getByRole('heading', { name: 'Bu organizasyonda henüz çalışma alanı yok' }),
   ).toBeVisible();
 
-  await page.getByLabel('Çalışma alanı adı').fill('Shell Test Ws');
   await page.getByRole('button', { name: 'Çalışma alanı oluştur' }).click();
+  await page.getByRole('dialog').getByLabel('Çalışma alanı adı').fill('Shell Test Ws');
+  await page.getByRole('dialog').getByRole('button', { name: 'Oluştur' }).click();
   await expect(page).toHaveURL(/\/app\/[a-f0-9-]+\/[a-f0-9-]+$/, { timeout: 10_000 });
   await expect(page.getByRole('banner')).toBeVisible();
   await expect(page.getByLabel('Organizasyon', { exact: true })).toBeVisible();
@@ -69,10 +70,12 @@ test('shell: stale workspace URL safely redirects to org page', async ({ page })
   await expect(page).toHaveURL(new RegExp(`/app/${orgId}$`));
 });
 
-test('shell: mobile — no overflow, logout reachable', async ({ page }) => {
+test('shell: mobile — no overflow, logout reachable through the nav drawer', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await signIn(page);
   await expect(page).toHaveURL(/\/app\/[a-f0-9-]+/, { timeout: 10_000 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  // On mobile the sidebar (with account controls) lives in the nav drawer.
+  await page.getByRole('button', { name: 'Menüyü aç/kapat' }).click();
   await expect(page.getByRole('button', { name: 'Çıkış yap' })).toBeVisible();
 });

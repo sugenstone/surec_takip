@@ -39,7 +39,7 @@ async function compose(...args) {
 
 async function playwright() {
   return new Promise((resolve) => {
-    const child = spawn(process.execPath, [playwrightCli, 'test'], {
+    const child = spawn(process.execPath, [playwrightCli, 'test', ...process.argv.slice(2)], {
       stdio: 'inherit',
       env,
       cwd: repoRoot,
@@ -54,13 +54,14 @@ try {
   await compose('up', '--build', '--detach', '--wait', '--wait-timeout', '180', 'db', 'server');
   // Distinct users keep spec fixtures isolated from each other: auth/shell
   // (e2e), projects owner (e2e2), invited permission-less member (e2e3) and
-  // sections owner (e2e4) and work items owner (e2e5).
+  // sections owner (e2e4), work items owner (e2e5), and UX fixtures (e2e6).
   for (const [email, displayName] of [
     ['e2e@example.test', 'E2e User'],
     ['e2e2@example.test', 'E2e User Two'],
     ['e2e3@example.test', 'E2e User Three'],
     ['e2e4@example.test', 'E2e User Four'],
     ['e2e5@example.test', 'E2e User Five'],
+    ['e2e6@example.test', 'E2e UX Review'],
   ]) {
     await compose(
       'run',

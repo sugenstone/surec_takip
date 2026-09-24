@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
   import { goto, invalidateAll } from '$app/navigation';
   import { resolve } from '$app/paths';
   import { translate } from '$lib/i18n';
@@ -8,6 +9,12 @@
   let { data } = $props();
   let locale = $derived(data.locale);
   let name = $state('');
+  // SSR renders the form before bindings and the submit handler attach;
+  // typing before hydration would be silently reset, so gate input on mount.
+  let ready = $state(false);
+  onMount(() => {
+    ready = true;
+  });
   let pending = $state(false);
   let errorMessage: string | null = $state(null);
 
@@ -34,10 +41,16 @@
   <title>{translate(locale, 'shell.noOrg.title')} — {translate(locale, 'app.name')}</title>
 </svelte:head>
 
-<section class="empty-section">
+<section class="form-panel onboarding">
   <h1>{translate(locale, 'shell.noOrg.title')}</h1>
   <p>{translate(locale, 'shell.noOrg.description')}</p>
-  <form onsubmit={submit} method="post" novalidate>
+  <form
+    aria-busy={pending}
+    aria-describedby={errorMessage ? 'org-error' : undefined}
+    onsubmit={submit}
+    method="post"
+    novalidate
+  >
     <label class="field-label" for="shell-org-name">
       {translate(locale, 'org.create.label')}
     </label>
@@ -46,74 +59,24 @@
         id="shell-org-name"
         name="name"
         type="text"
+        disabled={!ready}
         bind:value={name}
         required
         maxlength="200"
         autocomplete="off"
       />
-      <button type="submit" disabled={pending}>
+      <button type="submit" disabled={!ready || pending}>
         {pending ? translate(locale, 'org.create.pending') : translate(locale, 'org.create.submit')}
       </button>
     </div>
   </form>
   {#if errorMessage}
-    <p class="error" role="alert">{errorMessage}</p>
+    <p id="org-error" class="error" role="alert">{errorMessage}</p>
   {/if}
 </section>
 
 <style>
-  .empty-section {
-    max-width: 28rem;
-    margin: var(--space-16) auto;
-    padding: var(--space-8);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-  }
-  h1 {
-    font-size: var(--text-title);
-    margin-block: 0 var(--space-2);
-  }
-  p {
-    color: var(--muted-foreground);
-    margin-block: 0 var(--space-4);
-  }
-  .field-label {
-    display: block;
-    font-size: var(--text-small);
-    font-weight: 600;
-    margin-block-end: var(--space-2);
-  }
-  .create-row {
-    display: flex;
-    gap: var(--space-2);
-  }
-  .create-row input {
-    flex: 1;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    color: var(--foreground);
-    font: inherit;
-    padding: var(--space-3);
-    min-height: 44px;
-  }
-  .create-row button {
-    border: none;
-    border-radius: var(--radius-md);
-    background: var(--primary);
-    color: var(--primary-foreground);
-    font: inherit;
-    font-weight: 600;
-    padding: var(--space-3) var(--space-4);
-    min-height: 44px;
-    cursor: pointer;
-  }
-  .error {
-    color: var(--danger);
-    background: var(--surface-muted);
-    border-radius: var(--radius-md);
-    padding: var(--space-3);
-    margin-block: var(--space-4) 0 0;
+  .onboarding {
+    margin: var(--space-12) auto;
   }
 </style>

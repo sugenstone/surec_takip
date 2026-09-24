@@ -1,243 +1,119 @@
 <script lang="ts">
+  import PageHeader from '@platform/ui/PageHeader.svelte';
+  import EmptyState from '@platform/ui/EmptyState.svelte';
+  import FormDrawer from '@platform/ui/FormDrawer.svelte';
+  import Icon from '$lib/ui/Icon.svelte';
+  import WorkspaceCreateForm from '$lib/workspaces/WorkspaceCreateForm.svelte';
   import { translate } from '$lib/i18n';
   import { resolve } from '$app/paths';
-  import { goto, invalidateAll } from '$app/navigation';
-  import type { TranslationKey } from '$lib/i18n';
-  import { createWorkspace } from '$lib/api/client';
-  import { workspaceErrorMessageKey } from '$lib/api/errors';
+  import { goto } from '$app/navigation';
+  import { onMount } from 'svelte';
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
   let locale = $derived(data.locale);
-  let name = $state('');
-  let pending = $state(false);
-  let errorMessage: string | null = $state(null);
   const canCreate = $derived(data.permissions.includes('workspaces:create'));
+  let creating = $state(false);
+  // Creation opens a drawer that needs client-side state.
+  let ready = $state(false);
+  onMount(() => {
+    ready = true;
+  });
 </script>
 
 <svelte:head>
   <title>{data.organization.name} — {translate(locale, 'app.name')}</title>
 </svelte:head>
 
-<h1>{data.organization.name}</h1>
-<p class="context">
-  {translate(locale, 'shell.context.org')} · {data.organization.slug}
-</p>
+<PageHeader title={data.organization.name} description={translate(locale, 'shell.context.org')}>
+  {#snippet actions()}
+    {#if canCreate && data.workspaces.length > 0}
+      <button type="button" disabled={!ready} onclick={() => (creating = true)}>
+        <Icon name="plus" size={18} />{translate(locale, 'workspace.create.submit')}
+      </button>
+    {/if}
+  {/snippet}
+</PageHeader>
 
 {#if data.workspaces.length === 0}
-  <section class="empty-section">
-    <h2>{translate(locale, 'shell.noWs.title')}</h2>
-    <p>{translate(locale, canCreate ? 'shell.noWs.description' : 'shell.noWs.noPermission')}</p>
+  <EmptyState
+    title={translate(locale, 'shell.noWs.title')}
+    description={translate(
+      locale,
+      canCreate ? 'shell.noWs.description' : 'shell.noWs.noPermission',
+    )}
+  >
+    {#snippet icon()}<Icon name="layout-grid" size={22} />{/snippet}
     {#if canCreate}
-      <form
-        onsubmit={async (event) => {
-          event.preventDefault();
-          if (pending) return;
-          errorMessage = null;
-          pending = true;
-          try {
-            const ws = await createWorkspace(data.organization.id, name.trim());
-            name = '';
-            await invalidateAll();
-            await goto(resolve(`/app/${data.organization.id}/${ws.id}`));
-          } catch (error) {
-            const key: TranslationKey = workspaceErrorMessageKey(error);
-            errorMessage = translate(locale, key);
-          } finally {
-            pending = false;
-          }
-        }}
-        method="post"
-        novalidate
-      >
-        <label class="field-label" for="ws-create-name">
-          {translate(locale, 'workspace.create.label')}
-        </label>
-        <div class="create-row">
-          <input
-            id="ws-create-name"
-            name="name"
-            type="text"
-            bind:value={name}
-            required
-            maxlength="200"
-            autocomplete="off"
-          />
-          <button type="submit" disabled={pending}>
-            {pending
-              ? translate(locale, 'workspace.create.pending')
-              : translate(locale, 'workspace.create.submit')}
-          </button>
-        </div>
-      </form>
+      <div class="button-row">
+        <button type="button" disabled={!ready} onclick={() => (creating = true)}>
+          <Icon name="plus" size={18} />{translate(locale, 'workspace.create.submit')}
+        </button>
+      </div>
     {/if}
-    {#if errorMessage}
-      <p class="error" role="alert">{errorMessage}</p>
-    {/if}
-  </section>
+  </EmptyState>
 {:else}
-  <section class="ws-list-section">
-    <h2>{translate(locale, 'workspace.title')}</h2>
-    <ul class="ws-list">
+  <section class="page-section" aria-label={translate(locale, 'workspace.title')}>
+    <div class="section-head">
+      <div><h2>{translate(locale, 'workspace.title')}</h2></div>
+    </div>
+    <ul class="collection">
       {#each data.workspaces as ws (ws.id)}
-        <li>
-          <a class="ws-link" href={resolve(`/app/${data.organization.id}/${ws.id}`)}>
-            <span class="ws-name">{ws.name}</span>
-            <span class="ws-slug">{ws.slug}</span>
-          </a>
+        <li class="resource-card ws-card">
+          <div class="card-heading">
+            <span class="card-glyph glyph-workspace" aria-hidden="true"
+              ><Icon name="layout-grid" size={18} /></span
+            >
+            <h2>
+              <a class="card-link" href={resolve(`/app/${data.organization.id}/${ws.id}`)}
+                >{ws.name}</a
+              >
+            </h2>
+            <span class="card-chevron" aria-hidden="true"
+              ><Icon name="chevron-right" size={18} /></span
+            >
+          </div>
+          <p class="card-slug">{ws.slug}</p>
         </li>
       {/each}
     </ul>
-    {#if canCreate}
-      <details>
-        <summary>{translate(locale, 'workspace.create.submit')}</summary>
-        <form
-          onsubmit={async (event) => {
-            event.preventDefault();
-            if (pending) return;
-            errorMessage = null;
-            pending = true;
-            try {
-              const ws = await createWorkspace(data.organization.id, name.trim());
-              name = '';
-              await invalidateAll();
-              await goto(resolve(`/app/${data.organization.id}/${ws.id}`));
-            } catch (error) {
-              const key: TranslationKey = workspaceErrorMessageKey(error);
-              errorMessage = translate(locale, key);
-            } finally {
-              pending = false;
-            }
-          }}
-          method="post"
-          novalidate
-        >
-          <label class="field-label" for="ws-create-2">
-            {translate(locale, 'workspace.create.label')}
-          </label>
-          <div class="create-row">
-            <input
-              id="ws-create-2"
-              name="name"
-              type="text"
-              bind:value={name}
-              required
-              maxlength="200"
-              autocomplete="off"
-            />
-            <button type="submit" disabled={pending}>
-              {pending
-                ? translate(locale, 'workspace.create.pending')
-                : translate(locale, 'workspace.create.submit')}
-            </button>
-          </div>
-        </form>
-      </details>
-    {/if}
   </section>
 {/if}
 
+<FormDrawer
+  open={creating}
+  title={translate(locale, 'workspace.create.submit')}
+  closeLabel={translate(locale, 'ui.close')}
+  onClose={() => (creating = false)}
+>
+  <WorkspaceCreateForm
+    orgId={data.organization.id}
+    {locale}
+    onCancel={() => (creating = false)}
+    onCreated={async (ws) => {
+      creating = false;
+      await goto(resolve(`/app/${data.organization.id}/${ws.id}`));
+    }}
+  />
+</FormDrawer>
+
 <style>
-  h1 {
-    font-size: var(--text-title);
-    margin-block: 0 var(--space-1);
-  }
-  h2 {
-    font-size: var(--text-heading);
-    margin-block: 0 var(--space-3);
-  }
-  .context {
-    color: var(--muted-foreground);
-    margin-block: 0 var(--space-6);
-  }
-  .empty-section {
-    max-width: 28rem;
-    padding: var(--space-6);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-  }
-  .empty-section p {
-    color: var(--muted-foreground);
-    margin-block: 0 var(--space-4);
-  }
-  .field-label {
-    display: block;
-    font-size: var(--text-small);
-    font-weight: 600;
-    margin-block-end: var(--space-2);
-  }
-  .create-row {
+  .card-heading {
     display: flex;
-    gap: var(--space-2);
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
   }
-  .create-row input {
-    flex: 1;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    color: var(--foreground);
-    font: inherit;
-    padding: var(--space-3);
-    min-height: 44px;
-  }
-  .create-row button {
-    border: none;
-    border-radius: var(--radius-md);
-    background: var(--primary);
-    color: var(--primary-foreground);
-    font: inherit;
-    font-weight: 600;
-    padding: var(--space-3) var(--space-4);
-    min-height: 44px;
-    cursor: pointer;
-  }
-  .error {
-    color: var(--danger);
-    background: var(--surface-muted);
-    border-radius: var(--radius-md);
-    padding: var(--space-3);
-    margin-block: var(--space-4) 0 0;
-  }
-  .ws-list-section {
-    max-width: 40rem;
-  }
-  .ws-list {
-    list-style: none;
+  .ws-card h2 {
     margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
+    font-size: var(--text-body);
+    flex: 1;
+    min-width: 0;
   }
-  .ws-link {
-    display: flex;
-    justify-content: space-between;
-    gap: var(--space-4);
-    align-items: baseline;
-    padding: var(--space-3) var(--space-4);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    text-decoration: none;
-    color: inherit;
-  }
-  .ws-link:hover {
-    border-color: var(--primary);
-  }
-  .ws-name {
-    font-weight: 600;
-  }
-  .ws-slug {
+  .card-slug {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--text-caption);
     color: var(--muted-foreground);
-    font-size: var(--text-small);
-  }
-  details {
-    margin-block-start: var(--space-4);
-  }
-  summary {
-    cursor: pointer;
-    color: var(--primary);
-    font-weight: 500;
   }
 </style>

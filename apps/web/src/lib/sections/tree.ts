@@ -1,71 +1,46 @@
-// Safe client-side section tree assembly (ADR 0012). The backend returns a
-// FLAT ordered list; this helper builds the hierarchy in memory. It is
-// defensive by design: duplicate ids are ignored, rows pointing at missing
-// parents (orphans) and rows only reachable through cycles can never attach
-// to a root, so no corrupt input can loop or duplicate nodes. This is pure
-// presentation — the backend remains the authority.
+// Safe client-side section hierarchy helpers (ADR 0012/0014). The backend
+// returns a FLAT ordered list; drill-down pages filter it to the direct
+// children of the current level and resolve ancestor trails for breadcrumbs.
+// Recursion lives in the data model and the URL — never in a single-page
+// expanded tree. Helpers are defensive by design: duplicate ids, orphans and
+// cycles can never loop or fabricate parents. This is pure presentation —
+// the backend remains the authority.
 import type { SectionPublic } from '$lib/api/client';
 
-export interface SectionNode {
-  section: SectionPublic;
-  children: SectionNode[];
+function byPosition(a: SectionPublic, b: SectionPublic): number {
+  return a.position - b.position || a.id.localeCompare(b.id);
 }
 
-export interface SectionRow {
-  section: SectionPublic;
-  depth: number;
+// Direct children of one level only — never descendants. `null` selects the
+// project root. Cyclic input can attach nodes to each other but can never
+// fabricate a root or loop the caller (output is a plain filtered list);
+// duplicate ids keep their first occurrence instead of rendering twice.
+export function directChildren(
+  sections: SectionPublic[],
+  parentId: string | null,
+): SectionPublic[] {
+  const seen = new Set<string>();
+  return sections
+    .filter((section) => {
+      if ((section.parent_section_id ?? null) !== parentId || seen.has(section.id)) return false;
+      seen.add(section.id);
+      return true;
+    })
+    .sort(byPosition);
 }
 
-export function buildSectionTree(sections: SectionPublic[]): SectionNode[] {
-  const nodes = new Map<string, SectionNode>();
+// Direct-child counts per section id, for secondary card metadata. Shares
+// directChildren's dedupe rule so card counts match the rendered list.
+export function childCounts(sections: SectionPublic[]): Map<string, number> {
+  const seen = new Set<string>();
+  const counts = new Map<string, number>();
   for (const section of sections) {
-    if (!nodes.has(section.id)) {
-      nodes.set(section.id, { section, children: [] });
-    }
+    const parent = section.parent_section_id;
+    if (parent == null || seen.has(section.id)) continue;
+    seen.add(section.id);
+    counts.set(parent, (counts.get(parent) ?? 0) + 1);
   }
-  const roots: SectionNode[] = [];
-  for (const node of nodes.values()) {
-    const parentId = node.section.parent_section_id;
-    if (parentId === null || parentId === undefined) {
-      roots.push(node);
-      continue;
-    }
-    const parent = nodes.get(parentId);
-    // Orphans (missing parent) and cycle members never reach a root and are
-    // dropped instead of rendering unpredictably.
-    if (parent && parent !== node) {
-      parent.children.push(node);
-    }
-  }
-  sortLevel(roots);
-  return roots;
-}
-
-function sortLevel(nodes: SectionNode[]): void {
-  nodes.sort(
-    (a, b) => a.section.position - b.section.position || a.section.id.localeCompare(b.section.id),
-  );
-  for (const node of nodes) {
-    sortLevel(node.children);
-  }
-}
-
-// Iterative depth-first flattening for rendering: rows carry their depth so
-// the UI indents without recursive components.
-export function flattenTree(nodes: SectionNode[]): SectionRow[] {
-  const rows: SectionRow[] = [];
-  const stack: Array<{ node: SectionNode; depth: number }> = [];
-  for (let index = nodes.length - 1; index >= 0; index -= 1) {
-    stack.push({ node: nodes[index], depth: 0 });
-  }
-  while (stack.length > 0) {
-    const { node, depth } = stack.pop() as { node: SectionNode; depth: number };
-    rows.push({ section: node.section, depth });
-    for (let index = node.children.length - 1; index >= 0; index -= 1) {
-      stack.push({ node: node.children[index], depth: depth + 1 });
-    }
-  }
-  return rows;
+  return counts;
 }
 
 // Valid reparenting targets: every section except the node itself and its
@@ -84,4 +59,22 @@ export function movableParents(sections: SectionPublic[], sectionId: string): Se
     }
   }
   return sections.filter((section) => !descendants.has(section.id));
+}
+
+// Breadcrumbs use only the parent-scoped SSR list. Corrupt/missing chains never
+// produce guessed links; this helper is presentation, not authorization.
+export function sectionTrail(sections: SectionPublic[], id: string): SectionPublic[] {
+  const byId = new Map(sections.map((section) => [section.id, section]));
+  const seen = new Set<string>();
+  const trail: SectionPublic[] = [];
+  let current = byId.get(id);
+  while (current) {
+    if (seen.has(current.id)) return [];
+    seen.add(current.id);
+    trail.unshift(current);
+    if (!current.parent_section_id) return trail;
+    current = byId.get(current.parent_section_id);
+    if (!current) return [];
+  }
+  return trail;
 }

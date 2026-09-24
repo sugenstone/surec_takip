@@ -1,246 +1,131 @@
 <script lang="ts">
-  import { translate } from '$lib/i18n';
+  import PageHeader from '@platform/ui/PageHeader.svelte';
+  import EmptyState from '@platform/ui/EmptyState.svelte';
+  import FormDrawer from '@platform/ui/FormDrawer.svelte';
+  import StatusBadge from '@platform/ui/StatusBadge.svelte';
+  import Icon from '$lib/ui/Icon.svelte';
+  import ProjectCreateForm from '$lib/projects/ProjectCreateForm.svelte';
+  import { translate, type TranslationKey } from '$lib/i18n';
   import { resolve } from '$app/paths';
-  import { goto, invalidateAll } from '$app/navigation';
-  import { createProject } from '$lib/api/client';
-  import { projectErrorMessageKey } from '$lib/api/errors';
-  import type { TranslationKey } from '$lib/i18n';
+  import { goto } from '$app/navigation';
+  import { onMount } from 'svelte';
   import type { PageProps } from './$types';
 
   let { data }: PageProps = $props();
   let locale = $derived(data.locale);
-  let canCreate = $derived(data.permissions.includes('projects:create'));
-
-  let name = $state('');
-  let description = $state('');
-  let pending = $state(false);
-  let errorMessage: string | null = $state(null);
-
-  const statusKey = (status: string): TranslationKey =>
-    `projects.status.${status}` as TranslationKey;
-
-  async function submit(event: SubmitEvent) {
-    event.preventDefault();
-    if (pending) return;
-    errorMessage = null;
-    pending = true;
-    try {
-      const trimmedDescription = description.trim();
-      const project = await createProject(data.organization.id, data.workspace.id, {
-        name: name.trim(),
-        ...(trimmedDescription ? { description: trimmedDescription } : {}),
-      });
-      name = '';
-      description = '';
-      await invalidateAll();
-      await goto(
-        resolve(`/app/${data.organization.id}/${data.workspace.id}/projects/${project.id}`),
-      );
-    } catch (error) {
-      const key: TranslationKey = projectErrorMessageKey(error);
-      errorMessage = translate(locale, key);
-    } finally {
-      pending = false;
-    }
-  }
+  const canCreate = $derived(data.permissions.includes('projects:create'));
+  const orgId = $derived(data.organization.id);
+  const wsId = $derived(data.workspace.id);
+  let creating = $state(false);
+  // Creation opens a drawer that needs client-side state.
+  let ready = $state(false);
+  onMount(() => {
+    ready = true;
+  });
 </script>
 
 <svelte:head>
-  <title
-    >{translate(locale, 'projects.title')} — {data.workspace.name} — {translate(
-      locale,
-      'app.name',
-    )}</title
-  >
+  <title>{translate(locale, 'projects.title')} — {translate(locale, 'app.name')}</title>
 </svelte:head>
 
-<h1>{translate(locale, 'projects.title')}</h1>
+<PageHeader title={translate(locale, 'projects.title')} description={data.workspace.name}>
+  {#snippet metadata()}
+    {#if data.permissions.length === 0}
+      <span class="muted">{translate(locale, 'ui.readOnly')}</span>
+    {/if}
+  {/snippet}
+  {#snippet actions()}
+    {#if canCreate && data.projects.length > 0}
+      <button type="button" disabled={!ready} onclick={() => (creating = true)}>
+        <Icon name="plus" size={18} />{translate(locale, 'projects.create.submit')}
+      </button>
+    {/if}
+  {/snippet}
+</PageHeader>
 
-{#if data.loadFailed}
-  <p class="error" role="alert">{translate(locale, 'projects.error.network')}</p>
-{:else if data.projects.length === 0}
-  <section class="empty-section">
-    <h2>{translate(locale, 'projects.empty.title')}</h2>
-    <p>
-      {translate(locale, canCreate ? 'projects.empty.description' : 'projects.empty.noPermission')}
-    </p>
-  </section>
+{#if data.projects.length === 0}
+  <EmptyState
+    title={translate(locale, 'projects.empty.title')}
+    description={translate(
+      locale,
+      canCreate ? 'projects.empty.description' : 'projects.empty.noPermission',
+    )}
+  >
+    {#snippet icon()}<Icon name="folder" size={22} />{/snippet}
+    {#if canCreate}
+      <div class="button-row">
+        <button type="button" disabled={!ready} onclick={() => (creating = true)}>
+          <Icon name="plus" size={18} />{translate(locale, 'projects.create.submit')}
+        </button>
+      </div>
+    {/if}
+  </EmptyState>
 {:else}
-  <ul class="project-list">
+  <ul class="collection">
     {#each data.projects as project (project.id)}
-      <li>
-        <a
-          class="project-link"
-          href={resolve(`/app/${data.organization.id}/${data.workspace.id}/projects/${project.id}`)}
-        >
-          <span class="project-name">{project.name}</span>
-          {#if project.description}
-            <span class="project-description">{project.description}</span>
-          {/if}
-          <span
-            class="status-badge status-{project.status}"
-            aria-label="{translate(locale, 'projects.column.status')}: {translate(
-              locale,
-              statusKey(project.status),
-            )}"
-          >
-            {translate(locale, statusKey(project.status))}
-          </span>
-        </a>
+      <li class="resource-card project-card">
+        <header>
+          <div class="card-heading">
+            <span class="card-glyph glyph-project" aria-hidden="true"
+              ><Icon name="folder" size={18} /></span
+            >
+            <h2>
+              <a class="card-link" href={resolve(`/app/${orgId}/${wsId}/projects/${project.id}`)}
+                >{project.name}</a
+              >
+            </h2>
+          </div>
+          <div class="card-side">
+            <StatusBadge
+              status={project.status}
+              label={translate(locale, `projects.status.${project.status}` as TranslationKey)}
+            />
+            <span class="card-chevron" aria-hidden="true"
+              ><Icon name="chevron-right" size={18} /></span
+            >
+          </div>
+        </header>
+        {#if project.description}<p class="card-description">{project.description}</p>{/if}
       </li>
     {/each}
   </ul>
 {/if}
 
-{#if canCreate}
-  <section class="create-section">
-    <h2>{translate(locale, 'projects.create.submit')}</h2>
-    <form onsubmit={submit} method="post" novalidate>
-      <label class="field-label" for="project-create-name">
-        {translate(locale, 'projects.create.label')}
-      </label>
-      <input
-        id="project-create-name"
-        name="name"
-        type="text"
-        bind:value={name}
-        required
-        maxlength="200"
-        autocomplete="off"
-      />
-      <label class="field-label" for="project-create-description">
-        {translate(locale, 'projects.create.description')}
-      </label>
-      <textarea id="project-create-description" name="description" bind:value={description} rows="2"
-      ></textarea>
-      <button type="submit" disabled={pending || name.trim().length === 0}>
-        {pending
-          ? translate(locale, 'projects.create.pending')
-          : translate(locale, 'projects.create.submit')}
-      </button>
-    </form>
-  </section>
-{/if}
-
-{#if errorMessage}
-  <p class="error" role="alert">{errorMessage}</p>
-{/if}
+<FormDrawer
+  open={creating}
+  title={translate(locale, 'projects.create.submit')}
+  closeLabel={translate(locale, 'ui.close')}
+  onClose={() => (creating = false)}
+>
+  <ProjectCreateForm
+    {orgId}
+    {wsId}
+    {locale}
+    onCancel={() => (creating = false)}
+    onCreated={async (project) => {
+      creating = false;
+      await goto(resolve(`/app/${orgId}/${wsId}/projects/${project.id}`));
+    }}
+  />
+</FormDrawer>
 
 <style>
-  h1 {
-    font-size: var(--text-title);
-    margin-block: 0 var(--space-6);
-  }
-  h2 {
-    font-size: var(--text-heading);
-    margin-block: 0 var(--space-3);
-  }
-  .empty-section {
-    max-width: 28rem;
-    padding: var(--space-6);
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-  }
-  .empty-section p {
-    color: var(--muted-foreground);
-    margin-block: 0;
-  }
-  .project-list {
-    list-style: none;
-    margin: 0 0 var(--space-6);
-    padding: 0;
+  .card-heading {
     display: flex;
-    flex-direction: column;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+  }
+  .card-side {
+    display: flex;
+    align-items: center;
     gap: var(--space-2);
-    max-width: 40rem;
   }
-  .project-link {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: var(--space-2) var(--space-4);
-    padding: var(--space-3) var(--space-4);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    text-decoration: none;
-    color: inherit;
-  }
-  .project-link:hover {
-    border-color: var(--primary);
-  }
-  .project-name {
-    font-weight: 600;
-  }
-  .project-description {
-    color: var(--muted-foreground);
-    font-size: var(--text-small);
-    flex-basis: 100%;
-  }
-  .status-badge {
-    margin-inline-start: auto;
-    font-size: var(--text-small);
-    padding: var(--space-1) var(--space-3);
-    border-radius: var(--radius-sm);
-    border: 1px solid var(--border);
-    color: var(--muted-foreground);
-    white-space: nowrap;
-  }
-  /* Status color is decorative only; the badge text carries the meaning. */
-  .status-active {
-    border-color: var(--status-active);
-    color: var(--status-active);
-  }
-  .status-completed {
-    border-color: var(--status-completed);
-    color: var(--status-completed);
-  }
-  .status-archived {
-    opacity: 0.75;
-  }
-  .create-section {
-    max-width: 28rem;
-  }
-  .field-label {
-    display: block;
-    font-size: var(--text-small);
-    font-weight: 600;
-    margin-block: var(--space-3) var(--space-2);
-  }
-  input,
-  textarea {
-    width: 100%;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-md);
-    background: var(--surface);
-    color: var(--foreground);
-    font: inherit;
-    padding: var(--space-3);
-    min-height: 44px;
-  }
-  button {
-    margin-block-start: var(--space-4);
-    border: none;
-    border-radius: var(--radius-md);
-    background: var(--primary);
-    color: var(--primary-foreground);
-    font: inherit;
-    font-weight: 600;
-    padding: var(--space-3) var(--space-4);
-    min-height: 44px;
-    cursor: pointer;
-  }
-  button:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
-  }
-  .error {
-    color: var(--danger);
-    background: var(--surface-muted);
-    border-radius: var(--radius-md);
-    padding: var(--space-3);
-    margin-block: var(--space-4) 0 0;
-    max-width: 40rem;
+  .card-description {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 </style>

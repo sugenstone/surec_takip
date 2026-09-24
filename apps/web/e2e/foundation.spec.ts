@@ -49,7 +49,20 @@ test('theme preference survives reload and system respects dark mode', async ({
     await context.addCookies([{ name: 'theme', value: theme, url: 'http://127.0.0.1:4173' }]);
     await page.reload();
     await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
-    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(15, 23, 42)');
+    // The dark theme must produce a dark page background, whatever the exact
+    // token value is; the light token must not leak through.
+    const [darkBg, lightBg] = await page.evaluate(async () => {
+      const root = document.documentElement;
+      const original = root.getAttribute('data-theme') ?? '';
+      const dark = getComputedStyle(document.body).backgroundColor;
+      root.setAttribute('data-theme', 'light');
+      const light = getComputedStyle(document.body).backgroundColor;
+      root.setAttribute('data-theme', original);
+      return [dark, light];
+    });
+    expect(darkBg).not.toBe(lightBg);
+    const channels = darkBg.match(/\d+/g)?.map(Number) ?? [255];
+    expect(Math.max(...channels)).toBeLessThan(64);
   }
 });
 

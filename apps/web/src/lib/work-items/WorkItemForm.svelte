@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import ConfirmDialog from '@platform/ui/ConfirmDialog.svelte';
+  import { onMount, untrack } from 'svelte';
   import { translate, type Locale } from '$lib/i18n';
   import {
     createWorkItem,
@@ -14,12 +15,14 @@
     item,
     canArchive = false,
     onSaved,
+    onCancel,
   }: {
     scope: WorkItemScope;
     locale: Locale;
     item?: WorkItemPublic;
     canArchive?: boolean;
     onSaved: (item: WorkItemPublic) => Promise<void>;
+    onCancel?: () => void;
   } = $props();
   // The keyed parent creates a fresh draft on identity changes. Failed saves
   // retain it; background load updates do not overwrite an in-progress edit.
@@ -31,6 +34,11 @@
   let message = $state('');
   let saved = $state(false);
   let confirming = $state(false);
+  // Do not accept edits before bindings and the submit handler are hydrated.
+  let ready = $state(false);
+  onMount(() => {
+    ready = true;
+  });
   async function save(archive = false) {
     if (pending) return;
     message = '';
@@ -51,6 +59,7 @@
                 },
           )
         : await createWorkItem(scope, { name, slug: slug.trim() || undefined });
+      confirming = false;
       await onSaved(result);
       if (!item) {
         name = '';
@@ -70,16 +79,31 @@
     event.preventDefault();
     save();
   }}
-  aria-busy={pending}
+  aria-busy={pending || !ready}
+  aria-describedby={message && !confirming ? 'work-item-error' : undefined}
 >
   <label for="work-item-name">{translate(locale, 'workItems.name')}</label>
-  <input id="work-item-name" bind:value={name} required maxlength="200" autocomplete="off" />
+  <input
+    id="work-item-name"
+    disabled={!ready}
+    bind:value={name}
+    required
+    maxlength="200"
+    autocomplete="off"
+  />
   <label for="work-item-slug">{translate(locale, 'workItems.slug')}</label>
-  <input id="work-item-slug" bind:value={slug} maxlength="64" autocomplete="off" />
+  <input
+    id="work-item-slug"
+    disabled={!ready}
+    bind:value={slug}
+    maxlength="64"
+    autocomplete="off"
+  />
   {#if item}
     <label for="work-item-position">{translate(locale, 'workItems.position')}</label>
     <input
       id="work-item-position"
+      disabled={!ready}
       type="number"
       bind:value={position}
       min="0"
@@ -88,43 +112,58 @@
       required
     />
     <label for="work-item-status">{translate(locale, 'workItems.status')}</label>
-    <select id="work-item-status" bind:value={status}>
+    <select id="work-item-status" disabled={!ready} bind:value={status}>
       <option value="active">{translate(locale, 'workItems.status.active')}</option>
       <option value="completed">{translate(locale, 'workItems.status.completed')}</option>
     </select>
   {/if}
-  {#if message}<p class="error" role="alert">{message}</p>{/if}
+  {#if message && !confirming}<p id="work-item-error" class="error" role="alert">{message}</p>{/if}
   {#if saved}<p role="status">{translate(locale, 'workItems.saved')}</p>{/if}
-  <button disabled={pending || !name.trim()} type="submit"
-    >{translate(
-      locale,
-      pending ? 'workItems.saving' : item ? 'workItems.save' : 'workItems.create',
-    )}</button
-  >
+  <div class="button-row">
+    <button disabled={!ready || pending || !name.trim()} type="submit"
+      >{translate(
+        locale,
+        pending ? 'workItems.saving' : item ? 'workItems.save' : 'ui.create',
+      )}</button
+    >
+    {#if onCancel}
+      <button type="button" class="secondary" disabled={pending} onclick={onCancel}
+        >{translate(locale, 'workItems.cancel')}</button
+      >
+    {/if}
+  </div>
 </form>
 {#if item && canArchive}
-  {#if confirming}
-    <div class="archive-confirm">
-      <p>{translate(locale, 'workItems.archive.confirm')}</p>
-      <button type="button" disabled={pending} onclick={() => save(true)}
-        >{translate(locale, 'workItems.archive.submit')}</button
-      >
-      <button
-        type="button"
-        disabled={pending}
-        onclick={() => {
-          confirming = false;
-        }}>{translate(locale, 'workItems.cancel')}</button
-      >
-    </div>
-  {:else}
+  <div class="archive-area">
     <button
-      class="secondary"
+      class="danger"
       type="button"
-      disabled={pending}
+      disabled={!ready || pending}
       onclick={() => {
         confirming = true;
+        message = '';
       }}>{translate(locale, 'workItems.archive')}</button
     >
-  {/if}
+  </div>
+  <ConfirmDialog
+    open={confirming}
+    title={translate(locale, 'workItems.archive')}
+    description={translate(locale, 'workItems.archive.confirm')}
+    confirmLabel={translate(locale, 'workItems.archive.submit')}
+    cancelLabel={translate(locale, 'workItems.cancel')}
+    {pending}
+    error={message}
+    onCancel={() => {
+      confirming = false;
+    }}
+    onConfirm={() => save(true)}
+  />
 {/if}
+
+<style>
+  .archive-area {
+    margin-block-start: var(--space-6);
+    padding-block-start: var(--space-4);
+    border-block-start: 1px solid var(--border);
+  }
+</style>

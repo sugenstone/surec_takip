@@ -711,6 +711,12 @@ Avoid rendering ten levels simultaneously as nested bordered boxes.
 
 Enter a section to inspect deeper levels.
 
+Section hierarchy uses this drill-down model: recursive hierarchy is
+represented through URL-based drill-down navigation. A page renders one
+hierarchy level and its direct children; the UI does not recursively expand
+the entire descendant tree (§40 tree view is reserved for possible future
+tools, not for project sections).
+
 # 42. Process Step Visuals
 
 Suggested states:
@@ -1312,6 +1318,48 @@ What can I do next?
 If the visual design makes these answers harder, simplify it.
 
 ------------------------------------------------------------------------
+
+# 84. Implemented Product Page Contract (STEP 19.5/19.5C)
+
+- AppShell owns global context/account/navigation; pages own their breadcrumb
+  and content. Render exactly one main landmark and skip link.
+- Desktop uses a persistent sidebar (brand, org/workspace context selectors,
+  primary navigation, account block + logout); below the mobile breakpoint the
+  same sidebar becomes an off-canvas drawer with backdrop, Escape, scroll lock
+  and focus return to the menu trigger. Topbar carries the menu trigger,
+  navigation status, locale and theme selectors.
+- PageHeader orders context, title/description, status metadata and actions.
+  Use shared PageHeader, StatusBadge, EmptyState, ConfirmDialog, FormDrawer and
+  ActionMenu primitives.
+- Shared form/card/action styles live in app.css; feature components compose
+  these rather than copying separate visual systems.
+- Use `--page-gutter`, `--content-width`, `--form-width`, `--control-height`,
+  `--sidebar-width`, `--topbar-height`, `--selection-surface` and
+  `--danger-surface` for their semantic purposes. Interactive
+  form/buttons/summary controls have a 44px minimum height.
+- Creation surfaces are transient FormDrawer sheets (right-side dialog on
+  desktop, near-full-width on mobile) opened by an explicit primary action.
+  No permanent create form lives inside a list. Failed submission keeps the
+  drawer open with the draft; success closes it and refreshes/navigates.
+- Secondary entity actions use the shared ActionMenu overflow (menu role,
+  arrow/Home/End/Escape keys, outside click, focus return, danger styling only
+  on destructive items). Archive stays a deliberate ConfirmDialog flow.
+- Primary actions create/save; secondary actions edit/cancel; archive uses
+  danger styling and deliberate confirmation. Native dialogs focus cancel
+  first, support Escape and return focus. Failed requests keep the draft.
+- Status always includes localized text and a non-color cue. Manual completed
+  status does not imply process completion or a calculated percentage.
+- Recursive hierarchy is drill-down only: the project page lists root section
+  cards, a section page lists direct-child section cards and that section's
+  work items. Depth is expressed by URL and breadcrumbs, never by indentation
+  or disclosure trees. Section cards are navigation surfaces (stretched link +
+  chevron); management actions live on the section's own page.
+- WorkItemCard may receive a future child summary snippet only when backed by
+  real authorized data. Do not render speculative process/timer placeholders.
+- Validate long names, TR/EN, light/dark, 360/375/768px and desktop layouts.
+
+Architecture and implemented boundaries are recorded in
+[ADR 0014](decisions/0014-frontend-product-experience.md).
 
 # Final Design Rule
 

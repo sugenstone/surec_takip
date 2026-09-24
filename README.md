@@ -4,9 +4,9 @@ Genel amaçlı, multi-tenant iş ve operasyon platformu. Mimari modular monolith
 PostgreSQL doğruluk kaynağıdır. Varsayılan arayüz dili tr-TR, ikinci dil en.
 
 **Durum:** Generic SaaS foundation ve starter extraction tamamlandı.
-Projects (STEP 17), recursive Sections (STEP 18) mevcut. STEP 19 Work Items
-foundation yerel uygulama/review aşamasında; hosted CI henüz bu değişikliği
-çalıştırmadı. Process/timer/atama alanları henüz uygulanmadı.
+Projects (STEP 17), recursive Sections (STEP 18) ve Work Items (STEP 19)
+foundation mevcut; STEP 19 HEAD'i hosted CI'da doğrulandı. STEP 19.5 frontend
+ürün deneyimi yerel review aşamasında. Process/timer/atama henüz uygulanmadı.
 
 ## Bağlayıcı belgeler
 
@@ -29,6 +29,7 @@ foundation yerel uygulama/review aşamasında; hosted CI henüz bu değişikliğ
 - [Project domain foundation](docs/decisions/0011-project-domain-foundation.md)
 - [Sections / recursive hierarchy](docs/decisions/0012-sections-recursive-hierarchy.md)
 - [Work Items foundation](docs/decisions/0013-work-items-domain-foundation.md)
+- [Frontend ürün deneyimi](docs/decisions/0014-frontend-product-experience.md)
 
 ## Mevcut yapı
 
@@ -36,7 +37,8 @@ foundation yerel uygulama/review aşamasında; hosted CI henüz bu değişikliğ
 apps/web/             SvelteKit + TypeScript, request-local i18n, tema ve hata görünümü
 apps/server/          Axum, SQLx pool, config, JSON logging, probe ve migration araçları
 apps/worker/          Henüz uygulanmadı; gerçek background iş geldiğinde açılacak
-packages/ui/          Ortak semantic CSS tokenları
+packages/ui/          Semantic tokenlar, PageHeader, StatusBadge, EmptyState, ConfirmDialog,
+                      FormDrawer, ActionMenu
 packages/contracts/   Rust'tan üretilen OpenAPI ve TypeScript şeması
 migrations/           SQLx up/down migration çiftleri
 scripts/              Environment, Cargo, contract ve Docker doğrulama komutları
@@ -201,20 +203,25 @@ uniform 404. DB: kompozit self-FK ebeveynin aynı tenant/workspace/project
 üçlüsünü taşımasını ZORUNLU kılar (cross-project parenting depolanamaz);
 döngü (self + torun-ebeveyn) mutasyon transaction'ında recursive CTE ile
 reddedilir — aynı projenin mutasyonları projects satır kilidiyle serileşir.
-Ağaç yanıtı DÜZ ve deterministik sıralı tek sorgudur (N+1 yok); istemci
-ağacı bellekte kurar (güvenli kurucu, bozuk girdi toleranslı). Sıralama
-integer `position` primitive'ı (drag/drop ve gelecek bulk üretim aynı
-primitive'ı kullanır; `(position, id)` deterministik). Slug tekliği kardeş
-kapsamındadır. Yaşam döngüsü yapısal `active|archived`; arşiv yalnız
-`sections:archive` yetkiyle. DELETE/bulk üretim ertelendi. UI: proje detay
-sayfasında izin-farkındalıklı ağaç paneli (ekle/alt ekle/yeniden
-adlandır/taşı/köke taşı/yukarı-aşağı/arşivle).
+Liste yanıtı DÜZ ve deterministik sıralı tek sorgudur (N+1 yok); istemci
+hiyerarşiyi bellekte çözer (güvenli yardımcılar, bozuk girdi toleranslı).
+Sıralama integer `position` primitive'ı (drag/drop ve gelecek bulk üretim
+aynı primitive'ı kullanır; `(position, id)` deterministik). Slug tekliği
+kardeş kapsamındadır. Yaşam döngüsü yapısal `active|archived`; arşiv yalnız
+`sections:archive` yetkiyle. DELETE/bulk üretim ertelendi. UI: URL tabanlı
+drill-down gezinme (ADR 0014) — proje sayfası yalnız kök section kartlarını
+gösterir; her section kendi sayfasında (`.../sections/{section}`) doğrudan
+alt bölümlerini ve işçiliklerini listeler; tüm torunlar tek sayfada açılmaz.
+Yönetim işlemleri (yeniden adlandır/taşı/yukarı-aşağı/arşivle/yeniden
+etkinleştir) section'ın kendi sayfasındadır; oluşturma mevcut bağlamın
+altında yapılır. Breadcrumb üst zinciri taşır.
 
 ## İşçilik (Work Items)
 
-Bölüm ağacındaki İşçilik bağlantısı section listesini açar; oluşturma,
-detay bağlantısı, düzenleme ve arşivleme mevcuttur. Route:
-`/app/{org}/{ws}/projects/{project}/sections/{section}/work-items[/{item}]`.
+İşçilikler sahibi section'ın sayfasında listelenir ve oluşturulur; detay
+bağlantısı, düzenleme ve arşivleme mevcuttur. Route:
+`/app/{org}/{ws}/projects/{project}/sections/{section}/work-items/{item}`;
+eski `.../work-items` liste URL'si section sayfasına yönlenir.
 Backend tam üst zinciri ve üyelikleri doğrular; create/update/archive ayrı
 `work_items:*` izinleriyle çalışır. Arşiv normal list/get'ten düşer, satır ve
 slug korunur; restore/move henüz yoktur. Process veya timer içermez.
@@ -331,10 +338,12 @@ $env:PLAYWRIGHT_CHANNEL = 'chrome'
 npm run test:e2e
 ```
 
-Testler tr-TR/en, 360/1280 px, klavye, 404, tema, paralel SSR dil izolasyonu
+Testler tr-TR/en, 360/375/768/1280 px, klavye, 404, tema, paralel SSR dil izolasyonu
 ve gerçek auth akışını (login, yanlış parola, HttpOnly cookie, logout sonrası
-oturum geçersizliği) kapsar. Ürün kritik E2E akışı (proje/süreç/TV) henüz
-mevcut değildir.
+oturum geçersizliği) kapsar. Project → Section → Work Item gezinmesi, deep link,
+yetkisiz member, draft korunması ve arşiv onayı da gerçek backend üzerinde
+doğrulanır. İzole runner altı sentetik kullanıcı oluşturur; experience testleri
+kendi organizasyon/workspace verilerini oluşturur. Süreç/TV akışı henüz yoktur.
 
 ### Pre-push kapısı
 
@@ -416,5 +425,5 @@ integration) ve docker (`test:docker` smoke). Faz 1 kapanışında (commit
 
 ## Sonraki aşama
 
-STEP 19 final design/security/test quality review. Commit/push bu uygulama
+STEP 19.5 final design/security/test quality review. Commit/push bu uygulama
 görevinin kapsamında değildir. Process domain'i ayrı milestone'dır.
