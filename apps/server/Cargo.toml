@@ -72,3 +72,7 @@ required-features = ["integration"]
 [[test]]
 name = "work_items"
 required-features = ["integration"]
+
+[[test]]
+name = "processes"
+required-features = ["integration"]
