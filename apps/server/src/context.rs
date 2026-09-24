@@ -419,3 +419,39 @@ impl FromRequestParts<AppState> for WorkItemContext {
         Ok(Self { parent, work_item })
     }
 }
+
+#[derive(Deserialize)]
+struct ProcessRoute {
+    process_id: String,
+}
+
+/// Process context (STEP 20, ADR 0015): the FULL work item chain first, then
+/// the process scoped to that exact work item. A process id alone never
+/// resolves anything; wrong-parent, foreign, archived and unknown processes
+/// are one uniform 404. Eligibility only; mutations re-prove in-transaction.
+pub struct ProcessContext {
+    pub parent: WorkItemContext,
+    pub process: crate::processes::ProcessPublic,
+}
+impl FromRequestParts<AppState> for ProcessContext {
+    type Rejection = ApiError;
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let parent = WorkItemContext::from_request_parts(parts, state).await?;
+        let Path(route) = Path::<ProcessRoute>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| not_found(parts))?;
+        let id = route
+            .process_id
+            .parse::<Uuid>()
+            .map_err(|_| not_found(parts))?;
+        let scope = crate::processes::ProcessScope::of(&parent);
+        let process = crate::processes::find_accessible(&state.pool, scope, id)
+            .await
+            .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id_of(parts)))?
+            .ok_or_else(|| not_found(parts))?;
+        Ok(Self { parent, process })
+    }
+}

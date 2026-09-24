@@ -258,3 +258,45 @@ export async function updateWorkItem(
   });
   return body.data;
 }
+
+// Process DEFINITIONS (ADR 0015): configuration only, no execution state.
+export type ProcessPublic = components['schemas']['ProcessPublic'];
+export type ProcessScope = WorkItemScope & { workItemId: string };
+export function processesPath(scope: ProcessScope): string {
+  return `${workItemsPath(scope)}/${scope.workItemId}/processes`;
+}
+export async function createProcess(
+  scope: ProcessScope,
+  input: components['schemas']['CreateProcessRequest'],
+): Promise<ProcessPublic> {
+  const body = await request<{ data: ProcessPublic }>(processesPath(scope), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return body.data;
+}
+export async function updateProcess(
+  scope: ProcessScope,
+  id: string,
+  input: components['schemas']['UpdateProcessRequest'],
+): Promise<ProcessPublic> {
+  const body = await request<{ data: ProcessPublic }>(`${processesPath(scope)}/${id}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  return body.data;
+}
+// The server validates that the ids are exactly the active processes.
+export async function reorderProcesses(
+  scope: ProcessScope,
+  processIds: string[],
+): Promise<ProcessPublic[]> {
+  const body = await request<{ data: ProcessPublic[] }>(`${processesPath(scope)}/reorder`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ process_ids: processIds }),
+  });
+  return body.data;
+}

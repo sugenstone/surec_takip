@@ -361,6 +361,44 @@ Reads exclude archived and deleted items. Mutations revalidate and lock
 parents/memberships/grants; archived/deleted project or direct section blocks
 access. Archive is status-only retention, not hard delete. No restore/move or
 Process schema in STEP 19. See [ADR 0013](decisions/0013-work-items-domain-foundation.md).
+Migration 010 adds the composite FK target
+`work_items_scope_id_key UNIQUE(tenant_id, workspace_id, project_id, section_id, id)`.
+
+### processes (implemented — STEP 20, ADR 0015)
+
+Ordered process DEFINITIONS inside a work item; implemented by migration
+`20260924100000_processes`. Configuration only — no execution/runtime columns
+(no started/finished timestamps, durations, assignees or progress). Future
+execution records reference `processes.id`. Supersedes the conceptual
+card-owned `processes` sketch in section 7 (no `process_steps`, no
+`system_status`/`revision` columns in this slice).
+
+```text
+id uuid PRIMARY KEY
+tenant_id uuid NOT NULL FK organizations
+workspace_id / project_id / section_id / work_item_id uuid NOT NULL
+name text NOT NULL (trimmed length 1..200)
+slug citext NOT NULL (length 1..64)
+description text NULL (length <= 2000)
+position integer NOT NULL CHECK >= 0
+is_required boolean NOT NULL DEFAULT true   -- definition fact only
+status text NOT NULL DEFAULT active CHECK active|archived   -- configuration lifecycle
+created_at / updated_at timestamptz NOT NULL DEFAULT now()
+deleted_at timestamptz NULL
+UNIQUE(work_item_id, slug) -- includes archived/deleted rows
+FOREIGN KEY(tenant_id, workspace_id, project_id, section_id, work_item_id)
+  REFERENCES work_items(tenant_id, workspace_id, project_id, section_id, id)
+UNIQUE INDEX(work_item_id, position) WHERE deleted_at IS NULL AND status = 'active'
+INDEX(work_item_id, position, id)
+```
+
+Reads exclude archived and deleted processes. Create appends after every
+stored row; reorder is a server-authoritative full permutation of the active
+set, written in two phases so the active-position index never sees a
+transient duplicate. Mutations lock project → section/memberships → work item
+→ grants → process rows. Archive is terminal retention; slug stays occupied.
+Progress will be derived from future execution records, never stored as a
+percentage.
 
 ### cards
 
@@ -466,6 +504,10 @@ query/reporting requirements justify it rather than packing large arrays
 into JSON.
 
 ## 7. Processes and process steps
+
+> Conceptual only. The implemented `processes` table (STEP 20) is
+> work-item-owned and definition-only — see the `processes (implemented)`
+> entry above and ADR 0015.
 
 ### processes
 
@@ -1144,8 +1186,9 @@ as mandated by AGENTS.md. Their UI/dispatch features remain in their planned pha
 007 projects
 008 sections
 009 work_items (implemented; conceptual cards/card_relations superseded for STEP 19)
+010 processes (implemented as work-item-owned definitions, STEP 20)
 010 dynamic properties
-011 processes + process_steps
+011 process_steps + execution records (definitions implemented at 010)
 012 dependencies
 013 assignments
 014 time_sessions + stop_reasons

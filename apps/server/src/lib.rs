@@ -8,6 +8,7 @@ pub mod migrations;
 pub mod organizations;
 pub mod password;
 pub mod permissions;
+pub mod processes;
 pub mod projects;
 pub mod rbac;
 pub mod sections;
@@ -22,7 +23,7 @@ use axum::{
     http::{HeaderValue, header},
     middleware::{self, Next},
     response::Response,
-    routing::{delete, get, post},
+    routing::{delete, get, patch, post},
 };
 use error::{ApiError, ErrorCode};
 use serde::Serialize;
@@ -145,6 +146,10 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items", post(work_items::create_work_item_handler).get(work_items::list_work_items))
         .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}", get(work_items::get_work_item).patch(work_items::update_work_item_handler))
+        .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes", post(processes::create_process_handler).get(processes::list_processes))
+        // Static segment: matched ahead of the {process_id} parameter route.
+        .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/reorder", patch(processes::reorder_processes_handler))
+        .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}", get(processes::get_process).patch(processes::update_process_handler))
         .fallback(not_found)
         .method_not_allowed_fallback(method_not_allowed)
         .layer(middleware::from_fn(request_context))
@@ -239,6 +244,11 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         work_items::list_work_items,
         work_items::get_work_item,
         work_items::update_work_item_handler,
+        processes::create_process_handler,
+        processes::list_processes,
+        processes::reorder_processes_handler,
+        processes::get_process,
+        processes::update_process_handler,
         sections::update_section_handler,
         permissions::effective_workspace_permissions,
         organizations::list_permissions,
@@ -280,6 +290,12 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         work_items::WorkItemPublic,
         work_items::WorkItemMutationResponse,
         work_items::WorkItemListResponse,
+        processes::CreateProcessRequest,
+        processes::UpdateProcessRequest,
+        processes::ReorderProcessesRequest,
+        processes::ProcessPublic,
+        processes::ProcessMutationResponse,
+        processes::ProcessListResponse,
         organizations::PermissionPublic,
         organizations::PermissionListResponse,
         organizations::RolePublic,

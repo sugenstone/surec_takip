@@ -347,6 +347,54 @@ export interface paths {
         patch: operations["update_work_item_handler"];
         trace?: never;
     };
+    "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_processes"];
+        put?: never;
+        post: operations["create_process_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/reorder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["reorder_processes_handler"];
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["get_process"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["update_process_handler"];
+        trace?: never;
+    };
     "/api/v1/ready": {
         parameters: {
             query?: never;
@@ -411,6 +459,13 @@ export interface components {
         };
         CreateOrganizationResponse: {
             data: components["schemas"]["CreateOrganizationData"];
+        };
+        CreateProcessRequest: {
+            description?: string | null;
+            /** @description Defaults to true. */
+            is_required?: boolean | null;
+            name: string;
+            slug?: string | null;
         };
         CreateProjectRequest: {
             description?: string | null;
@@ -536,6 +591,33 @@ export interface components {
             description: string;
             key: string;
         };
+        ProcessListResponse: {
+            data: components["schemas"]["ProcessPublic"][];
+        };
+        ProcessMutationResponse: {
+            data: components["schemas"]["ProcessPublic"];
+        };
+        ProcessPublic: {
+            description?: string | null;
+            /** Format: uuid */
+            id: string;
+            is_required: boolean;
+            name: string;
+            /** Format: uuid */
+            organization_id: string;
+            /** Format: int32 */
+            position: number;
+            /** Format: uuid */
+            project_id: string;
+            /** Format: uuid */
+            section_id: string;
+            slug: string;
+            status: string;
+            /** Format: uuid */
+            work_item_id: string;
+            /** Format: uuid */
+            workspace_id: string;
+        };
         ProjectListResponse: {
             data: components["schemas"]["ProjectPublic"][];
         };
@@ -553,6 +635,10 @@ export interface components {
             status: string;
             /** Format: uuid */
             workspace_id: string;
+        };
+        ReorderProcessesRequest: {
+            /** @description Every active process of the work item, exactly once, in the desired order. */
+            process_ids: string[];
         };
         RoleListResponse: {
             data: components["schemas"]["RolePublic"][];
@@ -591,6 +677,15 @@ export interface components {
             status: string;
             /** Format: uuid */
             workspace_id: string;
+        };
+        UpdateProcessRequest: {
+            /** @description Empty string clears the stored description. */
+            description?: string | null;
+            is_required?: boolean | null;
+            name?: string | null;
+            slug?: string | null;
+            /** @description Only `archived` changes state; archive is terminal in this V1 API. */
+            status?: string | null;
         };
         /**
          * @description Ownership (tenant/workspace) and lifecycle authority never enter the body:
@@ -1975,6 +2070,297 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkItemMutationResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_processes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                workspace_id: string;
+                project_id: string;
+                section_id: string;
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessListResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    create_process_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                workspace_id: string;
+                project_id: string;
+                section_id: string;
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateProcessRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessMutationResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    reorder_processes_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                workspace_id: string;
+                project_id: string;
+                section_id: string;
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderProcessesRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessListResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    get_process: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                workspace_id: string;
+                project_id: string;
+                section_id: string;
+                work_item_id: string;
+                process_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessPublic"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    update_process_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                workspace_id: string;
+                project_id: string;
+                section_id: string;
+                work_item_id: string;
+                process_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProcessRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessMutationResponse"];
                 };
             };
             400: {

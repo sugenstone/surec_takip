@@ -98,6 +98,9 @@ test('work items: edits, validation draft, English mobile dark mode, archive', a
   expect(
     await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
   ).toBeTruthy();
+  // SSR already carries the value; the control is enabled only once hydrated,
+  // and focusing a still-disabled input is silently ignored by the browser.
+  await expect(page.getByLabel('Work item name')).toBeEnabled();
   await page.getByLabel('Work item name').focus();
   await expect(page.getByLabel('Work item name')).toBeFocused();
   await page.screenshot({

@@ -54,7 +54,8 @@ try {
   await compose('up', '--build', '--detach', '--wait', '--wait-timeout', '180', 'db', 'server');
   // Distinct users keep spec fixtures isolated from each other: auth/shell
   // (e2e), projects owner (e2e2), invited permission-less member (e2e3) and
-  // sections owner (e2e4), work items owner (e2e5), and UX fixtures (e2e6).
+  // sections owner (e2e4), work items owner (e2e5), UX fixtures (e2e6) and
+  // processes owner (e2e7).
   for (const [email, displayName] of [
     ['e2e@example.test', 'E2e User'],
     ['e2e2@example.test', 'E2e User Two'],
@@ -62,6 +63,7 @@ try {
     ['e2e4@example.test', 'E2e User Four'],
     ['e2e5@example.test', 'E2e User Five'],
     ['e2e6@example.test', 'E2e UX Review'],
+    ['e2e7@example.test', 'E2e Processes'],
   ]) {
     await compose(
       'run',

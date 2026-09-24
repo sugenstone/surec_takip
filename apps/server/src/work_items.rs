@@ -161,7 +161,8 @@ pub async fn visible_for_section(
 /// Locks hold parent lifecycle and both memberships stable until commit.
 /// A revoke committed before these checks is rejected; one racing after them
 /// waits for this transaction (no stale authorization window before the write).
-async fn lock_parent(
+/// Processes (ADR 0015) reuse this exact prefix of the lock order.
+pub(crate) async fn lock_parent(
     tx: &mut PgConnection,
     scope: WorkItemScope,
     actor: Uuid,

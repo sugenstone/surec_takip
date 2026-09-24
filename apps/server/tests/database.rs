@@ -51,30 +51,36 @@ async fn migration_can_revert_and_reapply_on_disposable_database(
     pool: PgPool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     migrations::revert_last(&pool).await?;
+    let processes_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'processes')",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(
+        !processes_exists,
+        "revert must remove the processes migration"
+    );
+    let process_permissions: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM permissions WHERE key LIKE 'processes:%'")
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(
+        process_permissions, 0,
+        "revert must remove the process permission catalog rows"
+    );
+    let scope_key: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM pg_constraint WHERE conname = 'work_items_scope_id_key'",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(scope_key, 0, "revert must remove the composite FK target");
     let work_items_exists: bool = sqlx::query_scalar(
         "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'work_items')",
     )
     .fetch_one(&pool)
     .await?;
     assert!(
-        !work_items_exists,
-        "revert must remove the work items migration"
-    );
-    let work_item_permissions: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM permissions WHERE key LIKE 'work_items:%'")
-            .fetch_one(&pool)
-            .await?;
-    assert_eq!(
-        work_item_permissions, 0,
-        "revert must remove the work item permission catalog rows"
-    );
-    let sections_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'sections')",
-    )
-    .fetch_one(&pool)
-    .await?;
-    assert!(
-        sections_exists,
+        work_items_exists,
         "revert of the newest migration must keep earlier migrations applied"
     );
     assert!(migrations::verify(&pool).await.is_err());
@@ -97,13 +103,11 @@ async fn changed_migration_checksum_is_rejected(
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn revert_preserves_dependent_data(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
-    // A dependent object on work_items must block rollback instead of being
-    // dropped.
-    sqlx::query(
-        "CREATE TABLE migration_safety_probe (work_item_id uuid REFERENCES work_items (id))",
-    )
-    .execute(&pool)
-    .await?;
+    // A dependent object on the newest table must block rollback instead of
+    // being dropped.
+    sqlx::query("CREATE TABLE migration_safety_probe (process_id uuid REFERENCES processes (id))")
+        .execute(&pool)
+        .await?;
     assert!(migrations::revert_last(&pool).await.is_err());
     migrations::verify(&pool).await?;
     let _: i64 = sqlx::query_scalar("SELECT count(*) FROM migration_safety_probe")

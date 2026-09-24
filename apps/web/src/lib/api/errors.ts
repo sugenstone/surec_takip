@@ -115,3 +115,28 @@ export function workItemErrorMessageKey(error: unknown): TranslationKey {
   }
   return 'workItems.error.unexpected';
 }
+
+// A stale reorder (someone changed the list meanwhile) surfaces as a
+// process_ids field error: ask for a refresh instead of a generic failure.
+export function processErrorMessageKey(error: unknown): TranslationKey {
+  if (error instanceof ApiRequestError) {
+    switch (error.code) {
+      case 'VALIDATION_ERROR': {
+        const fields = (error.details as { fields?: Record<string, unknown> } | undefined)?.fields;
+        if (fields && 'slug' in fields) return 'processes.error.slug';
+        if (fields && 'description' in fields) return 'processes.error.description';
+        if (fields && 'process_ids' in fields) return 'processes.error.order';
+        return 'processes.error.validation';
+      }
+      case 'PERMISSION_DENIED':
+        return 'processes.error.forbidden';
+      case 'RESOURCE_NOT_FOUND':
+        return 'processes.error.notFound';
+      case 'AUTH_REQUIRED':
+        return 'processes.error.auth';
+      case 'NETWORK_ERROR':
+        return 'processes.error.network';
+    }
+  }
+  return 'processes.error.unexpected';
+}

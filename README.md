@@ -4,9 +4,10 @@ Genel amaçlı, multi-tenant iş ve operasyon platformu. Mimari modular monolith
 PostgreSQL doğruluk kaynağıdır. Varsayılan arayüz dili tr-TR, ikinci dil en.
 
 **Durum:** Generic SaaS foundation ve starter extraction tamamlandı.
-Projects (STEP 17), recursive Sections (STEP 18) ve Work Items (STEP 19)
-foundation mevcut; STEP 19 HEAD'i hosted CI'da doğrulandı. STEP 19.5 frontend
-ürün deneyimi yerel review aşamasında. Process/timer/atama henüz uygulanmadı.
+Projects (STEP 17), recursive Sections (STEP 18), Work Items (STEP 19) ve
+STEP 19.5 frontend ürün deneyimi mevcut. STEP 20 Process tanımları (sıralı,
+zorunlu/opsiyonel yapılandırma) yerel review aşamasında. Süreç yürütme,
+timer, atama ve ilerleme henüz uygulanmadı.
 
 ## Bağlayıcı belgeler
 
@@ -30,6 +31,7 @@ foundation mevcut; STEP 19 HEAD'i hosted CI'da doğrulandı. STEP 19.5 frontend
 - [Sections / recursive hierarchy](docs/decisions/0012-sections-recursive-hierarchy.md)
 - [Work Items foundation](docs/decisions/0013-work-items-domain-foundation.md)
 - [Frontend ürün deneyimi](docs/decisions/0014-frontend-product-experience.md)
+- [Process domain foundation](docs/decisions/0015-process-domain-foundation.md)
 
 ## Mevcut yapı
 
@@ -231,6 +233,18 @@ izole Work Items kullanıcısı ekler ve `E2E_COMPOSE_PROJECT` değerini yalnız
 kendi geçici Compose fixture'ını hazırlayan teste iletir; geliştirici bu
 değişkeni ayarlamaz. Üye test fixture'ı yalnız bu geçici veritabanında kurulur.
 
+## Süreçler (Processes)
+
+Süreçler bir işçiliğin sıralı **tanımlarıdır** (ör. Taş Alımı → Kesim →
+İmalat → Nakliye → Montaj) ve işçilik detay sayfasındaki "Süreçler"
+bölümünde yönetilir: oluştur/düzenle (drawer), zorunlu/opsiyonel, erişilebilir
+yukarı/aşağı sıralama ve onaylı arşiv. Yalnız yapılandırmadır; yürütme,
+timer, atama veya ilerleme içermez (ADR 0015). Backend tam üst zinciri
+doğrular; `processes:create/update/archive/reorder` ayrı izinlerdir. Sıra
+sunucu tarafında tam permütasyon olarak doğrulanır ve aktif pozisyonlar DB
+seviyesinde tekildir. `npm run test:db` `processes` target'ını içerir; E2E
+runner izole bir Processes kullanıcısı ekler.
+
 ## Dil ve tema foundation
 
 Çeviri anahtarları `apps/web/src/lib/i18n` altında; Svelte metinleri sözlükten
@@ -281,7 +295,9 @@ FK + slug/status CHECK'leri + `projects:*` izinleri ve Owner grant backfill
 (ADR 0011); `008` sections — genel recursive hiyerarşi, composite self-FK +
 kardeş-kapsamı slug partial unique + `sections:*` izinleri ve Owner grant
 backfill (ADR 0012); `009` work_items — section-scoped composite FK, hard slug
-unique, ordering ve `work_items:*` grant backfill (ADR 0013). SQLx
+unique, ordering ve `work_items:*` grant backfill (ADR 0013); `010` processes —
+work-item-scoped composite FK, hard slug unique, aktif pozisyon partial unique
+ve `processes:*` grant backfill (ADR 0015). SQLx
 `_sqlx_migrations` tablosunda version/checksum tutar. Uygulanmış SQL dosyası
 sonradan değiştirilmez; yeni migration eklenir. Dosyalar LF satır sonuyla tutulur.
 

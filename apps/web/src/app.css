@@ -1025,6 +1025,119 @@ dialog .menu-item {
   font-family: var(--font-mono);
 }
 
+/* Process definitions (ADR 0015): an ordered CONFIGURATION list, visually
+   distinct from navigation cards — a numbered, dense row list with no
+   execution affordances (no progress, timers or assignees). */
+.process-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+.process-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xs);
+  transition: border-color 0.15s ease;
+}
+.process-row:hover,
+.process-row:focus-within {
+  border-color: var(--border-strong);
+}
+.process-order {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--muted-foreground);
+  min-width: 1.75rem;
+}
+.process-body {
+  min-width: 0;
+  padding-block: var(--space-1);
+}
+.app-content .process-name {
+  margin: 0;
+  font-size: var(--text-body);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.process-description {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-small);
+  color: var(--muted-foreground);
+  overflow-wrap: anywhere;
+}
+.requirement-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0.125rem var(--space-2);
+  border-radius: var(--radius-pill);
+  font-size: var(--text-caption);
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--foreground);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+}
+.requirement-badge[data-required='false'] {
+  color: var(--muted-foreground);
+  background: transparent;
+  border-style: dashed;
+}
+.process-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.app-content .process-actions .icon-btn {
+  width: var(--control-height);
+  height: var(--control-height);
+}
+.process-empty {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+.process-empty-icon {
+  display: inline-flex;
+  color: var(--muted-foreground);
+  padding-block-start: 0.125rem;
+}
+.process-empty p {
+  margin: 0;
+}
+.process-empty .process-empty-title {
+  color: var(--foreground);
+  font-weight: 600;
+  margin-block-end: var(--space-1);
+}
+@media (max-width: 40rem) {
+  /* Narrow screens: badge and actions wrap under the name instead of
+     squeezing it; the order number stays as the leading column. */
+  .process-row {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding-inline-start: var(--space-3);
+  }
+  .requirement-badge {
+    grid-column: 2;
+    justify-self: start;
+  }
+  .process-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    border-block-start: 1px solid var(--border-subtle);
+    padding-block-start: var(--space-1);
+  }
+}
+
 /* Dialogs: centered modal (confirmations) and the right-sheet form
    drawer used for creation/edit surfaces. */
 dialog {

@@ -420,6 +420,45 @@ inside a transaction with parent/membership/grant locks. Field keys are name,
 slug, position, status. No raw DB errors. No revision or pagination protocol
 is introduced in this slice; see [ADR 0013](decisions/0013-work-items-domain-foundation.md).
 
+# 10.2 Processes (implemented — STEP 20)
+
+Base: `/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes`.
+
+| Method | Suffix | Input | Success |
+| --- | --- | --- | --- |
+| GET | collection | none | 200 `{data: ProcessPublic[]}` |
+| POST | collection | name, optional slug, description, is_required (default true) | 201 `{data: ProcessPublic}` |
+| PATCH | `/reorder` | `process_ids: uuid[]` (every active process exactly once) | 200 `{data: ProcessPublic[]}` |
+| GET | `/{process_id}` | none | 200 bare ProcessPublic |
+| PATCH | `/{process_id}` | optional name, slug, description (empty clears), is_required, status | 200 `{data: ProcessPublic}` |
+
+Public fields: id, organization_id, workspace_id, project_id, section_id,
+work_item_id, name, slug, description, position, is_required, status.
+These are process DEFINITIONS: no execution state (start/finish, timers,
+assignees, progress) exists in this API.
+
+Reads require both memberships and the exact parent route chain through an
+active section, non-archived project and visible work item; there is no
+global `/processes/{id}` route. Archived/deleted processes are invisible (404,
+same fingerprint as unknown/foreign/wrong-parent). List order `(position,id)`;
+create appends. `position` is not writable through PATCH — ordering changes
+only through `/reorder`, which rejects missing, extra, duplicate, unknown,
+foreign or archived ids with one `process_ids` 422. Status accepts only the
+configuration values `active|archived`; execution states (`running`,
+`completed`, …) are 422. Slug namespace is work-item-local and retained after
+archive/deletion.
+
+Create requires `processes:create`; all per-process PATCH requires
+`processes:update`; setting archived additionally requires
+`processes:archive`; reorder requires only `processes:reorder`. Archive is
+terminal in this V1 API (no DELETE/restore). Unknown DTO fields, including
+all scope ids, `position` and execution fields, are rejected with 400.
+
+Error ordering: 401 → 404 → 403 → 422. Mutations revalidate inside a
+transaction (project → section/memberships → work item → grants → process
+rows). No revision or pagination protocol; see
+[ADR 0015](decisions/0015-process-domain-foundation.md).
+
 # 11. Cards
 
 ``` text
@@ -456,6 +495,9 @@ PUT /.../cards/{card_id}/properties/{property_id}
 Server validates value against definition type/settings.
 
 # 13. Processes
+
+> Conceptual only; the implemented work-item-owned definition API is in
+> section 10.2 (STEP 20). Restore, DELETE and steps are deferred.
 
 ``` text
 GET    /.../cards/{card_id}/processes

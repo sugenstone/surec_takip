@@ -3,6 +3,7 @@ import { ApiRequestError } from './client';
 import {
   loginErrorMessageKey,
   organizationErrorMessageKey,
+  processErrorMessageKey,
   projectErrorMessageKey,
   sectionErrorMessageKey,
   workspaceErrorMessageKey,
@@ -158,5 +159,38 @@ describe('work item error mapping', () => {
     expect(workItemErrorMessageKey(new ApiRequestError(422, 'VALIDATION_ERROR', '', ''))).toBe(
       'workItems.error.validation',
     );
+  });
+});
+
+describe('process error mapping', () => {
+  it('maps status codes without inspecting server messages', () => {
+    for (const [code, key] of [
+      ['PERMISSION_DENIED', 'forbidden'],
+      ['RESOURCE_NOT_FOUND', 'notFound'],
+      ['AUTH_REQUIRED', 'auth'],
+      ['NETWORK_ERROR', 'network'],
+      ['INTERNAL_ERROR', 'unexpected'],
+    ]) {
+      expect(
+        processErrorMessageKey(new ApiRequestError(400, code, 'misleading slug message', '')),
+      ).toBe(`processes.error.${key}`);
+    }
+    expect(processErrorMessageKey(new Error('slug'))).toBe('processes.error.unexpected');
+  });
+  it('maps validation fields, including a stale reorder, with a generic fallback', () => {
+    for (const [field, key] of [
+      ['slug', 'slug'],
+      ['description', 'description'],
+      ['process_ids', 'order'],
+      ['name', 'validation'],
+    ]) {
+      expect(
+        processErrorMessageKey(
+          new ApiRequestError(422, 'VALIDATION_ERROR', 'ignored', '', {
+            fields: { [field]: ['ignored'] },
+          }),
+        ),
+      ).toBe(`processes.error.${key}`);
+    }
   });
 });
