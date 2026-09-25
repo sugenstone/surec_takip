@@ -10,6 +10,7 @@ pub mod password;
 pub mod permissions;
 pub mod process_executions;
 pub mod processes;
+pub mod progress;
 pub mod projects;
 pub mod rbac;
 pub mod sections;
@@ -307,6 +308,7 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         processes::ProcessPublic,
         processes::ProcessMutationResponse,
         processes::ProcessListResponse,
+        progress::Progress,
         process_executions::StartExecutionRequest,
         process_executions::CancelExecutionRequest,
         process_executions::ExecutionPublic,

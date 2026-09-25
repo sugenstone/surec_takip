@@ -26,7 +26,20 @@ pub struct WorkItemScope {
     pub section_id: Uuid,
 }
 
-#[derive(Clone, Serialize, sqlx::FromRow, ToSchema)]
+#[derive(Clone, sqlx::FromRow)]
+struct WorkItemRow {
+    id: Uuid,
+    organization_id: Uuid,
+    workspace_id: Uuid,
+    project_id: Uuid,
+    section_id: Uuid,
+    name: String,
+    slug: String,
+    position: i32,
+    status: String,
+}
+
+#[derive(Clone, Serialize, ToSchema)]
 pub struct WorkItemPublic {
     pub id: Uuid,
     pub organization_id: Uuid,
@@ -37,6 +50,26 @@ pub struct WorkItemPublic {
     pub slug: String,
     pub position: i32,
     pub status: String,
+    /// Derived on read (ADR 0017) — never a column; handlers attach the real
+    /// aggregate before serialization.
+    pub progress: crate::progress::Progress,
+}
+
+impl From<WorkItemRow> for WorkItemPublic {
+    fn from(row: WorkItemRow) -> Self {
+        Self {
+            id: row.id,
+            organization_id: row.organization_id,
+            workspace_id: row.workspace_id,
+            project_id: row.project_id,
+            section_id: row.section_id,
+            name: row.name,
+            slug: row.slug,
+            position: row.position,
+            status: row.status,
+            progress: crate::progress::Progress::default(),
+        }
+    }
 }
 
 const COLUMNS: &str = "id, tenant_id AS organization_id, workspace_id, project_id, section_id, name, slug::text AS slug, position, status";
@@ -135,7 +168,7 @@ pub async fn find_accessible(
     scope: WorkItemScope,
     id: Uuid,
 ) -> Result<Option<WorkItemPublic>, WorkItemError> {
-    sqlx::query_as(&format!(
+    sqlx::query_as::<_, WorkItemRow>(&format!(
         "SELECT {COLUMNS} FROM work_items WHERE {SCOPE} AND id = $5 AND {VISIBLE}"
     ))
     .bind(scope.organization_id)
@@ -146,12 +179,13 @@ pub async fn find_accessible(
     .fetch_optional(pool)
     .await
     .map_err(database_error)
+    .map(|row| row.map(WorkItemPublic::from))
 }
 pub async fn visible_for_section(
     pool: &PgPool,
     scope: WorkItemScope,
 ) -> Result<Vec<WorkItemPublic>, WorkItemError> {
-    sqlx::query_as(&format!(
+    sqlx::query_as::<_, WorkItemRow>(&format!(
         "SELECT {COLUMNS} FROM work_items WHERE {SCOPE} AND {VISIBLE} ORDER BY position, id"
     ))
     .bind(scope.organization_id)
@@ -161,6 +195,7 @@ pub async fn visible_for_section(
     .fetch_all(pool)
     .await
     .map_err(database_error)
+    .map(|rows| rows.into_iter().map(WorkItemPublic::from).collect())
 }
 
 /// Match section serialization order: project first, then the direct section.
@@ -253,11 +288,11 @@ pub async fn create_work_item(
     .await
     .map_err(database_error)?;
     let position = i32::try_from(next).map_err(|_| invalid("position"))?;
-    let row = sqlx::query_as(&format!("INSERT INTO work_items (id, tenant_id, workspace_id, project_id, section_id, name, slug, position) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING {COLUMNS}"))
+    let row = sqlx::query_as::<_, WorkItemRow>(&format!("INSERT INTO work_items (id, tenant_id, workspace_id, project_id, section_id, name, slug, position) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING {COLUMNS}"))
         .bind(Uuid::now_v7()).bind(scope.organization_id).bind(scope.workspace_id).bind(scope.project_id).bind(scope.section_id)
         .bind(name).bind(slug).bind(position).fetch_one(&mut *tx).await.map_err(database_error)?;
     tx.commit().await.map_err(database_error)?;
-    Ok(row)
+    Ok(WorkItemPublic::from(row))
 }
 
 pub async fn update_work_item(
@@ -269,7 +304,7 @@ pub async fn update_work_item(
 ) -> Result<WorkItemPublic, WorkItemError> {
     let mut tx = pool.begin().await.map_err(database_error)?;
     lock_parent(&mut tx, scope, actor).await?;
-    let current: WorkItemPublic = sqlx::query_as(&format!(
+    let current: WorkItemPublic = sqlx::query_as::<_, WorkItemRow>(&format!(
         "SELECT {COLUMNS} FROM work_items WHERE {SCOPE} AND id = $5 AND {VISIBLE} FOR UPDATE"
     ))
     .bind(scope.organization_id)
@@ -280,6 +315,7 @@ pub async fn update_work_item(
     .fetch_optional(&mut *tx)
     .await
     .map_err(database_error)?
+    .map(WorkItemPublic::from)
     .ok_or(WorkItemError::NotAccessible)?;
     require_permission(&mut tx, scope, actor, WORK_ITEMS_UPDATE).await?;
     if input.status.as_deref().map(str::trim) == Some("archived") {
@@ -314,11 +350,11 @@ pub async fn update_work_item(
     if !matches!(status, "active" | "completed" | "archived") {
         return Err(invalid("status"));
     }
-    let row = sqlx::query_as(&format!("UPDATE work_items SET name = $6, slug = $7, position = $8, status = $9, updated_at = now() WHERE {SCOPE} AND id = $5 AND {VISIBLE} RETURNING {COLUMNS}"))
+    let row = sqlx::query_as::<_, WorkItemRow>(&format!("UPDATE work_items SET name = $6, slug = $7, position = $8, status = $9, updated_at = now() WHERE {SCOPE} AND id = $5 AND {VISIBLE} RETURNING {COLUMNS}"))
         .bind(scope.organization_id).bind(scope.workspace_id).bind(scope.project_id).bind(scope.section_id).bind(id)
         .bind(name).bind(slug).bind(position).bind(status).fetch_one(&mut *tx).await.map_err(database_error)?;
     tx.commit().await.map_err(database_error)?;
-    Ok(row)
+    Ok(WorkItemPublic::from(row))
 }
 
 async fn check_permission(
@@ -355,9 +391,20 @@ pub async fn create_work_item_handler(
 ) -> Result<(StatusCode, Json<WorkItemMutationResponse>), ApiError> {
     check_permission(&state, &context, WORK_ITEMS_CREATE, &request_id).await?;
     let ApiJson(body) = body?;
-    let data = create_work_item(&state.pool, context.scope, context.user_id, &body)
+    let mut data = create_work_item(&state.pool, context.scope, context.user_id, &body)
         .await
         .map_err(|e| api_error(e, &request_id))?;
+    let scope = context.scope;
+    data.progress = crate::progress::for_work_item(
+        &state.pool,
+        scope.organization_id,
+        scope.workspace_id,
+        scope.project_id,
+        scope.section_id,
+        data.id,
+    )
+    .await
+    .map_err(|e| api_error(database_error(e), &request_id))?;
     Ok((StatusCode::CREATED, Json(WorkItemMutationResponse { data })))
 }
 
@@ -369,17 +416,47 @@ pub async fn list_work_items(
     Extension(request_id): Extension<RequestId>,
     context: WorkItemSectionContext,
 ) -> Result<Json<WorkItemListResponse>, ApiError> {
-    let data = visible_for_section(&state.pool, context.scope)
+    let scope = context.scope;
+    let mut data = visible_for_section(&state.pool, scope)
         .await
         .map_err(|e| api_error(e, &request_id))?;
+    // One grouped statement for the whole list — never a query per item.
+    let progress = crate::progress::for_work_items(
+        &state.pool,
+        scope.organization_id,
+        scope.workspace_id,
+        scope.project_id,
+        scope.section_id,
+    )
+    .await
+    .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0.clone()))?;
+    for item in &mut data {
+        item.progress = progress.get(&item.id).copied().unwrap_or_default();
+    }
     Ok(Json(WorkItemListResponse { data }))
 }
 
 #[utoipa::path(get, path = "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}",
 params(("organization_id" = Uuid, Path),("workspace_id" = Uuid, Path),("project_id" = Uuid, Path),("section_id" = Uuid, Path),("work_item_id" = Uuid, Path)),
 responses((status = 200, body = WorkItemPublic),(status = 401, body = crate::error::ErrorEnvelope),(status = 404, body = crate::error::ErrorEnvelope)))]
-pub async fn get_work_item(context: WorkItemContext) -> Result<Json<WorkItemPublic>, ApiError> {
-    Ok(Json(context.work_item))
+pub async fn get_work_item(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    context: WorkItemContext,
+) -> Result<Json<WorkItemPublic>, ApiError> {
+    let mut item = context.work_item;
+    let scope = context.parent.scope;
+    item.progress = crate::progress::for_work_item(
+        &state.pool,
+        scope.organization_id,
+        scope.workspace_id,
+        scope.project_id,
+        scope.section_id,
+        item.id,
+    )
+    .await
+    .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0.clone()))?;
+    Ok(Json(item))
 }
 
 #[utoipa::path(patch, path = "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}",
@@ -394,7 +471,7 @@ pub async fn update_work_item_handler(
 ) -> Result<Json<WorkItemMutationResponse>, ApiError> {
     check_permission(&state, &context.parent, WORK_ITEMS_UPDATE, &request_id).await?;
     let ApiJson(body) = body?;
-    let data = update_work_item(
+    let mut data = update_work_item(
         &state.pool,
         context.parent.scope,
         context.work_item.id,
@@ -403,5 +480,16 @@ pub async fn update_work_item_handler(
     )
     .await
     .map_err(|e| api_error(e, &request_id))?;
+    let scope = context.parent.scope;
+    data.progress = crate::progress::for_work_item(
+        &state.pool,
+        scope.organization_id,
+        scope.workspace_id,
+        scope.project_id,
+        scope.section_id,
+        data.id,
+    )
+    .await
+    .map_err(|e| api_error(database_error(e), &request_id))?;
     Ok(Json(WorkItemMutationResponse { data }))
 }

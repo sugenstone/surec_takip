@@ -16,6 +16,7 @@
   import ActionMenu, { type MenuItem } from '@platform/ui/ActionMenu.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import Breadcrumbs from '$lib/ui/Breadcrumbs.svelte';
+  import ProgressBlock from '$lib/ui/ProgressBlock.svelte';
   import type { TranslationKey } from '$lib/i18n';
   import type { PageProps } from './$types';
 
@@ -129,6 +130,10 @@
     {/if}
   {/snippet}
 </PageHeader>
+
+<div class="progress-strip">
+  <ProgressBlock progress={data.project.progress} {locale} />
+</div>
 
 {#if error}
   <p id="project-error" class="error" role="alert">{error}</p>

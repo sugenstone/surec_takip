@@ -4,6 +4,7 @@
   import FormDrawer from '@platform/ui/FormDrawer.svelte';
   import StatusBadge from '@platform/ui/StatusBadge.svelte';
   import Icon from '$lib/ui/Icon.svelte';
+  import ProgressBlock from '$lib/ui/ProgressBlock.svelte';
   import ProjectCreateForm from '$lib/projects/ProjectCreateForm.svelte';
   import { translate, type TranslationKey } from '$lib/i18n';
   import { resolve } from '$app/paths';
@@ -86,6 +87,7 @@
           </div>
         </header>
         {#if project.description}<p class="card-description">{project.description}</p>{/if}
+        <ProgressBlock progress={project.progress} {locale} compact />
       </li>
     {/each}
   </ul>

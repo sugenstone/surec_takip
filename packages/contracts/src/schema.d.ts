@@ -725,6 +725,30 @@ export interface components {
             /** Format: uuid */
             workspace_id: string;
         };
+        /** @description Derived progress for one scope — never persisted (ADR 0017). */
+        Progress: {
+            /**
+             * Format: int64
+             * @description Counted definitions with an execution currently in flight.
+             */
+            active: number;
+            /**
+             * Format: int64
+             * @description Counted definitions satisfying DONE (∃ completed ∧ ¬∃ active).
+             */
+            completed: number;
+            /**
+             * Format: int32
+             * @description Backend-authoritative integer percent (round-half-up, integer math).
+             *     NULL exactly when total = 0 — never a fake 0 or 100.
+             */
+            percent?: number | null;
+            /**
+             * Format: int64
+             * @description All counted definitions in the scope.
+             */
+            total: number;
+        };
         ProjectListResponse: {
             data: components["schemas"]["ProjectPublic"][];
         };
@@ -738,6 +762,11 @@ export interface components {
             name: string;
             /** Format: uuid */
             organization_id: string;
+            /**
+             * @description Derived project progress (ADR 0017) — never a column; handlers attach
+             *     the real aggregate before serialization.
+             */
+            progress: components["schemas"]["Progress"];
             slug: string;
             status: string;
             /** Format: uuid */
@@ -778,6 +807,11 @@ export interface components {
             parent_section_id?: string | null;
             /** Format: int32 */
             position: number;
+            /**
+             * @description Derived subtree progress (ADR 0017) — never a column; handlers attach
+             *     the real aggregate before serialization.
+             */
+            progress: components["schemas"]["Progress"];
             /** Format: uuid */
             project_id: string;
             slug: string;
@@ -854,6 +888,11 @@ export interface components {
             organization_id: string;
             /** Format: int32 */
             position: number;
+            /**
+             * @description Derived on read (ADR 0017) — never a column; handlers attach the real
+             *     aggregate before serialization.
+             */
+            progress: components["schemas"]["Progress"];
             /** Format: uuid */
             project_id: string;
             /** Format: uuid */

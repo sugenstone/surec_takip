@@ -4032,6 +4032,40 @@
           }
         }
       },
+      "Progress": {
+        "type": "object",
+        "description": "Derived progress for one scope — never persisted (ADR 0017).",
+        "required": [
+          "completed",
+          "active",
+          "total"
+        ],
+        "properties": {
+          "active": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Counted definitions with an execution currently in flight."
+          },
+          "completed": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Counted definitions satisfying DONE (∃ completed ∧ ¬∃ active)."
+          },
+          "percent": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "Backend-authoritative integer percent (round-half-up, integer math).\nNULL exactly when total = 0 — never a fake 0 or 100."
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "All counted definitions in the scope."
+          }
+        }
+      },
       "ProjectListResponse": {
         "type": "object",
         "required": [
@@ -4065,7 +4099,8 @@
           "workspace_id",
           "name",
           "slug",
-          "status"
+          "status",
+          "progress"
         ],
         "properties": {
           "description": {
@@ -4084,6 +4119,10 @@
           "organization_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/Progress",
+            "description": "Derived project progress (ADR 0017) — never a column; handlers attach\nthe real aggregate before serialization."
           },
           "slug": {
             "type": "string"
@@ -4190,7 +4229,8 @@
           "name",
           "slug",
           "position",
-          "status"
+          "status",
+          "progress"
         ],
         "properties": {
           "id": {
@@ -4214,6 +4254,10 @@
           "position": {
             "type": "integer",
             "format": "int32"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/Progress",
+            "description": "Derived subtree progress (ADR 0017) — never a column; handlers attach\nthe real aggregate before serialization."
           },
           "project_id": {
             "type": "string",
@@ -4451,7 +4495,8 @@
           "name",
           "slug",
           "position",
-          "status"
+          "status",
+          "progress"
         ],
         "properties": {
           "id": {
@@ -4468,6 +4513,10 @@
           "position": {
             "type": "integer",
             "format": "int32"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/Progress",
+            "description": "Derived on read (ADR 0017) — never a column; handlers attach the real\naggregate before serialization."
           },
           "project_id": {
             "type": "string",

@@ -221,4 +221,8 @@ export const tr = {
   'executions.error.auth': 'Oturumunuz sona erdi. Yeniden giriş yapın.',
   'executions.error.network': 'Sunucuya ulaşılamadı. Yeniden deneyin.',
   'executions.error.unexpected': 'İşlem tamamlanamadı. Yeniden deneyin.',
+  'progress.label': 'İlerleme',
+  'progress.processes': '{completed}/{total} süreç',
+  'progress.running': '{count} devam ediyor',
+  'progress.empty': 'Henüz süreç tanımlanmadı',
 } as const;

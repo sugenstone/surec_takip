@@ -80,6 +80,8 @@ export type ProjectStatus = ProjectPublic['status'];
 export type SectionPublic = components['schemas']['SectionPublic'];
 export type SectionStatus = SectionPublic['status'];
 export type MeData = components['schemas']['MeData'];
+// Derived progress (ADR 0017): same shape on project/section/work-item.
+export type Progress = components['schemas']['Progress'];
 
 export async function loginRequest(email: string, password: string): Promise<SessionUser> {
   const body = await request<{ data: { user: SessionUser } }>('/api/v1/auth/login', {

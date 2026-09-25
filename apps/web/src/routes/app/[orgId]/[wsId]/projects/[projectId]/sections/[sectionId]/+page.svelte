@@ -25,6 +25,7 @@
   import SectionEditForm from '$lib/sections/SectionEditForm.svelte';
   import WorkItemCard from '$lib/work-items/WorkItemCard.svelte';
   import WorkItemForm from '$lib/work-items/WorkItemForm.svelte';
+  import ProgressBlock from '$lib/ui/ProgressBlock.svelte';
   import type { TranslationKey } from '$lib/i18n';
   import type { PageProps } from './$types';
 
@@ -172,6 +173,10 @@
       {/if}
     {/snippet}
   </PageHeader>
+
+  <div class="progress-strip">
+    <ProgressBlock progress={section.progress} {locale} />
+  </div>
 
   {#if error}
     <p id="section-error" class="error" role="alert">{error}</p>

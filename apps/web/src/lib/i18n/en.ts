@@ -226,4 +226,8 @@ export const en: Record<keyof typeof tr, string> = {
   'executions.error.auth': 'Your session expired. Sign in again.',
   'executions.error.network': 'Could not reach the server. Try again.',
   'executions.error.unexpected': 'Could not complete the action. Try again.',
+  'progress.label': 'Progress',
+  'progress.processes': '{completed} of {total} processes',
+  'progress.running': '{count} in progress',
+  'progress.empty': 'No processes defined yet',
 };

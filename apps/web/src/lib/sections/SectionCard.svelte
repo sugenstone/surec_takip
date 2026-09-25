@@ -8,6 +8,7 @@
   import type { SectionPublic } from '$lib/api/client';
   import StatusBadge from '@platform/ui/StatusBadge.svelte';
   import Icon from '$lib/ui/Icon.svelte';
+  import ProgressBlock from '$lib/ui/ProgressBlock.svelte';
   let {
     section,
     childCount,
@@ -55,6 +56,8 @@
     </div>
   </header>
   <p>{translate(locale, 'sections.childCount', { count: String(childCount) })}</p>
+  <!-- Whole-subtree progress (ADR 0017), not only direct children. -->
+  <ProgressBlock progress={section.progress} {locale} compact />
 </article>
 
 <style>

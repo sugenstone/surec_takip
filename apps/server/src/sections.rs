@@ -598,6 +598,9 @@ pub struct SectionPublic {
     pub slug: String,
     pub position: i32,
     pub status: String,
+    /// Derived subtree progress (ADR 0017) — never a column; handlers attach
+    /// the real aggregate before serialization.
+    pub progress: crate::progress::Progress,
 }
 
 impl From<SectionRow> for SectionPublic {
@@ -612,6 +615,7 @@ impl From<SectionRow> for SectionPublic {
             slug: row.slug,
             position: row.position,
             status: row.status,
+            progress: crate::progress::Progress::default(),
         }
     }
 }
@@ -717,13 +721,19 @@ pub async fn create_section_handler(
     )
     .await;
     match result {
-        Ok(section) => Ok((
-            StatusCode::CREATED,
-            Json(SectionMutationResponse {
-                data: SectionPublic::from(section),
-            }),
-        )
-            .into_response()),
+        Ok(section) => {
+            let mut data = SectionPublic::from(section);
+            data.progress = crate::progress::for_section(
+                &state.pool,
+                organization_id,
+                workspace_id,
+                project_id,
+                data.id,
+            )
+            .await
+            .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0.clone()))?;
+            Ok((StatusCode::CREATED, Json(SectionMutationResponse { data })).into_response())
+        }
         Err(SectionError::NotAccessible) => Err(not_found()),
         Err(SectionError::Forbidden) => Err(crate::rbac::permission_denied(&request_id)),
         Err(SectionError::SlugAlreadyTaken) => Err(ApiError::invalid_fields(
@@ -779,9 +789,26 @@ pub async fn list_sections(
         context.project_id,
     )
     .await
+    .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0.clone()))?;
+    // Each section carries ITS OWN subtree progress — one grouped statement
+    // for the whole project, never a recursive query per card (ADR 0017).
+    let progress = crate::progress::for_sections(
+        &state.pool,
+        context.organization_id,
+        context.workspace_id,
+        context.project_id,
+    )
+    .await
     .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0))?;
     Ok(Json(SectionListResponse {
-        data: sections.into_iter().map(SectionPublic::from).collect(),
+        data: sections
+            .into_iter()
+            .map(|row| {
+                let mut section = SectionPublic::from(row);
+                section.progress = progress.get(&section.id).copied().unwrap_or_default();
+                section
+            })
+            .collect(),
     }))
 }
 
@@ -800,11 +827,23 @@ pub async fn list_sections(
     )
 )]
 pub async fn get_section(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
     context: crate::context::SectionContext,
 ) -> Result<Json<SectionPublic>, ApiError> {
     // The full parent chain plus the section scoped to the resolved project
     // resolved in the SectionContext extractor; misses are uniform 404s.
-    Ok(Json(SectionPublic::from(context.section)))
+    let mut section = SectionPublic::from(context.section);
+    section.progress = crate::progress::for_section(
+        &state.pool,
+        context.organization_id,
+        context.workspace_id,
+        context.project_id,
+        section.id,
+    )
+    .await
+    .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0))?;
+    Ok(Json(section))
 }
 
 #[utoipa::path(patch,
@@ -908,13 +947,19 @@ pub async fn update_section_handler(
     )
     .await;
     match result {
-        Ok(section) => Ok((
-            StatusCode::OK,
-            Json(SectionMutationResponse {
-                data: SectionPublic::from(section),
-            }),
-        )
-            .into_response()),
+        Ok(section) => {
+            let mut data = SectionPublic::from(section);
+            data.progress = crate::progress::for_section(
+                &state.pool,
+                context.organization_id,
+                context.workspace_id,
+                context.project_id,
+                data.id,
+            )
+            .await
+            .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0.clone()))?;
+            Ok((StatusCode::OK, Json(SectionMutationResponse { data })).into_response())
+        }
         Err(SectionError::NotAccessible) => Err(not_found()),
         Err(SectionError::Forbidden) => Err(crate::rbac::permission_denied(&request_id)),
         Err(SectionError::SlugAlreadyTaken) => Err(ApiError::invalid_fields(

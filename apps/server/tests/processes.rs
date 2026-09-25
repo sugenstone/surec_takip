@@ -1749,28 +1749,28 @@ async fn migration_backfill_preserves_assignments_and_member_has_no_grants(pool:
 async fn rollback_is_blocked_by_dependents_and_reapplies(pool: PgPool) {
     let f = Fixture::new(&pool).await;
     f.create("Kept").await;
-    // The newest migration is 011 (process_executions); a dependent object on
-    // ITS table must block the down migration without CASCADE.
+    // The newest migrations are 012 (index-only, no dependents) then 011
+    // (process_executions): a dependent object on the executions table must
+    // block 011's down migration without CASCADE.
     exec(
         &pool,
         "CREATE TABLE process_dependency_probe (execution_id uuid REFERENCES process_executions (id))",
     )
     .await;
-    assert!(
-        platform_server::migrations::revert_last(&pool)
-            .await
-            .is_err()
-    );
+    platform_server::migrations::revert_last(&pool)
+        .await
+        .unwrap_or_else(|error| panic!("012 index down must apply: {error}"));
+    assert!(MIGRATOR.undo(&pool, 20260924100000).await.is_err());
     let kept: i64 = sqlx::query_scalar("SELECT count(*) FROM processes")
         .fetch_one(&pool)
         .await
         .unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(kept, 1, "a blocked rollback keeps data");
     exec(&pool, "DROP TABLE process_dependency_probe").await;
-    // Without dependents the down migration (executions table first, then
-    // the processes composite FK target) succeeds and the chain reapplies
-    // cleanly.
-    platform_server::migrations::revert_last(&pool)
+    // Without dependents the down migration (executions table) succeeds and
+    // the chain reapplies cleanly.
+    MIGRATOR
+        .undo(&pool, 20260924100000)
         .await
         .unwrap_or_else(|error| panic!("{error}"));
     MIGRATOR

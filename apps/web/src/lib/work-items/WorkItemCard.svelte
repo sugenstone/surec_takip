@@ -8,6 +8,7 @@
   import type { WorkItemPublic, WorkItemScope } from '$lib/api/client';
   import StatusBadge from '@platform/ui/StatusBadge.svelte';
   import Icon from '$lib/ui/Icon.svelte';
+  import ProgressBlock from '$lib/ui/ProgressBlock.svelte';
   let {
     item,
     scope,
@@ -40,6 +41,7 @@
     />
   </header>
   <p class="item-reference">{item.slug}</p>
+  <ProgressBlock progress={item.progress} {locale} compact />
   {#if children}<div class="work-item-content">{@render children()}</div>{/if}
 </article>
 

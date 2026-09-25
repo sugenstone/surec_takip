@@ -12,6 +12,7 @@ function section(partial: Partial<SectionPublic> & { id: string }): SectionPubli
     slug: partial.id,
     position: 0,
     status: 'active',
+    progress: { completed: 0, active: 0, total: 0 },
     ...partial,
   };
 }

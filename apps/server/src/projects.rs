@@ -414,6 +414,9 @@ pub struct ProjectPublic {
     pub slug: String,
     pub description: Option<String>,
     pub status: String,
+    /// Derived project progress (ADR 0017) — never a column; handlers attach
+    /// the real aggregate before serialization.
+    pub progress: crate::progress::Progress,
 }
 
 impl From<ProjectRow> for ProjectPublic {
@@ -426,6 +429,7 @@ impl From<ProjectRow> for ProjectPublic {
             slug: row.slug,
             description: row.description,
             status: row.status,
+            progress: crate::progress::Progress::default(),
         }
     }
 }
@@ -539,13 +543,14 @@ pub async fn create_project_handler(
     )
     .await;
     match result {
-        Ok(project) => Ok((
-            StatusCode::CREATED,
-            Json(ProjectMutationResponse {
-                data: ProjectPublic::from(project),
-            }),
-        )
-            .into_response()),
+        Ok(project) => {
+            let mut data = ProjectPublic::from(project);
+            data.progress =
+                crate::progress::for_project(&state.pool, organization_id, workspace_id, data.id)
+                    .await
+                    .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0.clone()))?;
+            Ok((StatusCode::CREATED, Json(ProjectMutationResponse { data })).into_response())
+        }
         // Parent pair inaccessible (or nonexistent): uniform 404.
         Err(ProjectError::NotAccessible) => Err(not_found()),
         // Permission revoked between the handler check and the transaction.
@@ -590,9 +595,21 @@ pub async fn list_projects(
     let projects =
         visible_for_workspace(&state.pool, context.organization_id, context.workspace_id)
             .await
+            .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0.clone()))?;
+    // One grouped statement for all project cards — no per-project queries.
+    let progress =
+        crate::progress::for_projects(&state.pool, context.organization_id, context.workspace_id)
+            .await
             .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0))?;
     Ok(Json(ProjectListResponse {
-        data: projects.into_iter().map(ProjectPublic::from).collect(),
+        data: projects
+            .into_iter()
+            .map(|row| {
+                let mut project = ProjectPublic::from(row);
+                project.progress = progress.get(&project.id).copied().unwrap_or_default();
+                project
+            })
+            .collect(),
     }))
 }
 
@@ -610,12 +627,23 @@ pub async fn list_projects(
     )
 )]
 pub async fn get_project(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
     context: crate::context::ProjectContext,
 ) -> Result<Json<ProjectPublic>, ApiError> {
     // The full resolution chain (both memberships, parent authority, project
     // scoped to the resolved workspace/tenant, not deleted) happened in the
     // ProjectContext extractor; misses are uniform 404s.
-    Ok(Json(ProjectPublic::from(context.project)))
+    let mut project = ProjectPublic::from(context.project);
+    project.progress = crate::progress::for_project(
+        &state.pool,
+        context.organization_id,
+        context.workspace_id,
+        context.project_id,
+    )
+    .await
+    .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0))?;
+    Ok(Json(project))
 }
 
 #[utoipa::path(patch,
@@ -724,13 +752,18 @@ pub async fn update_project_handler(
     )
     .await;
     match result {
-        Ok(project) => Ok((
-            StatusCode::OK,
-            Json(ProjectMutationResponse {
-                data: ProjectPublic::from(project),
-            }),
-        )
-            .into_response()),
+        Ok(project) => {
+            let mut data = ProjectPublic::from(project);
+            data.progress = crate::progress::for_project(
+                &state.pool,
+                context.organization_id,
+                context.workspace_id,
+                data.id,
+            )
+            .await
+            .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0.clone()))?;
+            Ok((StatusCode::OK, Json(ProjectMutationResponse { data })).into_response())
+        }
         Err(ProjectError::NotAccessible) => Err(not_found()),
         Err(ProjectError::Forbidden) => Err(crate::rbac::permission_denied(&request_id)),
         Err(ProjectError::SlugAlreadyTaken) => Err(ApiError::invalid_fields(

@@ -80,3 +80,7 @@ required-features = ["integration"]
 [[test]]
 name = "process_executions"
 required-features = ["integration"]
+
+[[test]]
+name = "progress"
+required-features = ["integration"]

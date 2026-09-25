@@ -581,6 +581,11 @@ dialog h2 {
   margin: 0;
 }
 
+/* Compact derived-progress summary beneath a detail header (ADR 0017). */
+.progress-strip {
+  margin-block: var(--space-2) var(--space-6);
+}
+
 .panel,
 .form-panel {
   background: var(--surface);

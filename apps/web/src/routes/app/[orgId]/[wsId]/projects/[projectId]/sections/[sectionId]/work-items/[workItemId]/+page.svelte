@@ -20,6 +20,7 @@
   } from '$lib/api/client';
   import { executionErrorMessageKey, processErrorMessageKey } from '$lib/api/errors';
   import WorkItemForm from '$lib/work-items/WorkItemForm.svelte';
+  import ProgressBlock from '$lib/ui/ProgressBlock.svelte';
   import ProcessForm from '$lib/processes/ProcessForm.svelte';
   import ProcessRow from '$lib/processes/ProcessRow.svelte';
   import type { PageProps } from './$types';
@@ -189,6 +190,10 @@
         )}
       />{/snippet}
   </PageHeader>
+
+  <div class="progress-strip">
+    <ProgressBlock progress={data.item.progress} {locale} />
+  </div>
 
   <section class="page-section" aria-labelledby="processes-heading">
     <div class="section-head">

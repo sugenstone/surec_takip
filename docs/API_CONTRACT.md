@@ -327,6 +327,9 @@ PATCH  /organizations/{org}/workspaces/{ws}/projects/{project_id}
 - Slug conflicts map to `VALIDATION_ERROR` with `details.fields.slug`.
 - `DELETE` and `/restore` are deferred until product semantics are defined;
   `deleted_at` is schema infrastructure only.
+- Every ProjectPublic (list and detail) embeds `progress` — the derived
+  aggregate `{completed, active, total, percent|null}` over ALL counted
+  process definitions in the project (ADR 0017).
 
 Planned later (documented shape, not yet implemented):
 
@@ -377,6 +380,9 @@ PATCH  /.../projects/{project_id}/sections/{section_id}
 - `DELETE`/`restore`, dedicated `move`/`duplicate` commands and
   `bulk-create` are planned later phases (move/reorder are expressible via
   PATCH today; `expected_revision` arrives with collaborative editing).
+- Every SectionPublic embeds `progress` — the leaf-weighted aggregate over
+  the section's ENTIRE recursive subtree, not a child-percentage average
+  (ADR 0017).
 
 Planned later (documented shape, not yet implemented):
 
@@ -399,8 +405,9 @@ Base: `/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/project
 | PATCH | `/{work_item_id}` | optional name, slug, position, status | 200 `{data: WorkItemPublic}` |
 
 Public fields: id, organization_id, workspace_id, project_id, section_id,
-name, slug, position, status. Scope and initial active status are server-derived;
-unknown DTO fields (including identity/move fields) are rejected.
+name, slug, position, status, progress. Scope and initial active status are
+server-derived; unknown DTO fields (including identity/move fields) are
+rejected.
 
 Reads require both memberships and the exact parent route chain. Archived or
 deleted work items and archived/deleted project/direct section are invisible
@@ -499,6 +506,30 @@ transaction. Error ordering: 401 → 404 → 403 → 400/422 → 409. Archiving
 any ancestor (process, work item, section subtree, project) that still
 contains an active execution fails `409`. See
 [ADR 0016](decisions/0016-process-execution.md).
+
+# 10.4 Derived progress (implemented — STEP 21B)
+
+`ProjectPublic`, `SectionPublic` and `WorkItemPublic` — in every list and
+detail response above — embed one shared `progress` object:
+
+``` text
+progress: {
+  completed: integer,   -- counted definitions satisfying DONE
+  active:    integer,   -- counted definitions with an active execution
+  total:     integer,   -- all counted definitions in the scope
+  percent:   integer|null  -- round-half-up int; NULL exactly when total = 0
+}
+```
+
+A "counted" definition is `deleted_at IS NULL AND status = 'active'`
+under reachable parents; DONE means "a completed attempt exists AND no
+active attempt exists" — an active retry regresses a process to not-done.
+Work Item aggregates its own definitions; Section and Project aggregates
+are leaf-weighted over the whole subtree (never child-percentage
+averages), so re-organizing sections cannot change a project's number.
+Progress is computed per response in one SQL statement — never stored,
+never client-calculated. See
+[ADR 0017](decisions/0017-progress-engine.md).
 
 # 11. Cards
 

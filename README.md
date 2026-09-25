@@ -7,7 +7,8 @@ PostgreSQL doğruluk kaynağıdır. Varsayılan arayüz dili tr-TR, ikinci dil e
 Projects (STEP 17), recursive Sections (STEP 18), Work Items (STEP 19) ve
 STEP 19.5 frontend ürün deneyimi mevcut. STEP 20 Process tanımları ve
 STEP 21A Process execution core (başlat/tamamla/iptal, immutable deneme
-geçmişi) yerel review aşamasında. İlerleme, atama, pause/resume ve
+geçmişi) yerel review aşamasında. STEP 21B derived Progress Engine
+project/section/work-item yanıtlarına gömülüdür. Atama, pause/resume ve
 realtime henüz uygulanmadı.
 
 ## Bağlayıcı belgeler
@@ -34,6 +35,7 @@ realtime henüz uygulanmadı.
 - [Frontend ürün deneyimi](docs/decisions/0014-frontend-product-experience.md)
 - [Process domain foundation](docs/decisions/0015-process-domain-foundation.md)
 - [Process execution](docs/decisions/0016-process-execution.md)
+- [Progress engine](docs/decisions/0017-progress-engine.md)
 
 ## Mevcut yapı
 
@@ -258,6 +260,15 @@ deneme varken process/work item/section (alt ağaç dahil)/project arşivi
 409 ile reddedilir. `npm run test:db` `process_executions` target'ını
 içerir; E2E runner izole bir Processes kullanıcısı ekler.
 
+İlerleme (STEP 21B, ADR 0017) saklanmaz, her yanıtta tek SQL ifadesiyle
+türetilir: `progress: {completed, active, total, percent}` —
+`percent` `total=0`'da `null`'dır. "Counted" = silinmemiş/aktif tanım ve
+ulaşılabilir sahipler; DONE = completed denemesi var VE aktif deneme
+yok — aktif retry yüzdeyi geriletir. Section/Project aggregate'leri tüm
+alt ağaç üzerinden leaf-weighted'tır (child yüzde ortalaması değil);
+yapısal değişmezlik garantidir. `npm run test:db` `progress` target'ını
+içerir; E2E runner izole bir Progress kullanıcısı ekler.
+
 ## Dil ve tema foundation
 
 Çeviri anahtarları `apps/web/src/lib/i18n` altında; Svelte metinleri sözlükten
@@ -313,7 +324,9 @@ work-item-scoped composite FK, hard slug unique, aktif pozisyon partial unique
 ve `processes:*` grant backfill (ADR 0015); `011` process_executions —
 immutable deneme kayıtları, composite process FK, tek aktif deneme partial
 unique, terminal-state CHECK'leri ve `process_executions:*` grant backfill
-(Owner + Member, organization scope) (ADR 0016). SQLx
+(Owner + Member, organization scope) (ADR 0016); `012` progress destek
+indexi — `process_executions(process_id) WHERE status='completed'`
+(ADR 0017). SQLx
 `_sqlx_migrations` tablosunda version/checksum tutar. Uygulanmış SQL dosyası
 sonradan değiştirilmez; yeni migration eklenir. Dosyalar LF satır sonuyla tutulur.
 

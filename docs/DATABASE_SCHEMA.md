@@ -397,8 +397,8 @@ stored row; reorder is a server-authoritative full permutation of the active
 set, written in two phases so the active-position index never sees a
 transient duplicate. Mutations lock project → section/memberships → work item
 → grants → process rows. Archive is terminal retention; slug stays occupied.
-Progress will be derived from future execution records, never stored as a
-percentage.
+Progress is derived from `process_executions` history at read time
+(STEP 21B, ADR 0017), never stored as a percentage.
 
 ### process_executions (implemented — STEP 21A, ADR 0016)
 
@@ -427,6 +427,7 @@ UNIQUE INDEX(process_id) WHERE status = 'active'   -- one live attempt per proce
 INDEX(tenant_id, workspace_id, project_id, started_at, id) WHERE status = 'active'
 INDEX(process_id, attempt_no)
 INDEX(tenant_id, workspace_id, project_id, section_id, work_item_id, process_id, attempt_no)
+INDEX(process_id) WHERE status = 'completed'   -- progress EXISTS probe (012)
 ```
 
 The composite process FK (migration 011 also adds
