@@ -51,36 +51,37 @@ async fn migration_can_revert_and_reapply_on_disposable_database(
     pool: PgPool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     migrations::revert_last(&pool).await?;
+    let executions_exists: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'process_executions')",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(
+        !executions_exists,
+        "revert must remove the process_executions migration"
+    );
+    let execution_permissions: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM permissions WHERE key LIKE 'process_executions:%'",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        execution_permissions, 0,
+        "revert must remove the execution permission catalog rows"
+    );
+    let scope_key: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM pg_constraint WHERE conname = 'processes_scope_id_key'",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(scope_key, 0, "revert must remove the composite FK target");
     let processes_exists: bool = sqlx::query_scalar(
         "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'processes')",
     )
     .fetch_one(&pool)
     .await?;
     assert!(
-        !processes_exists,
-        "revert must remove the processes migration"
-    );
-    let process_permissions: i64 =
-        sqlx::query_scalar("SELECT count(*) FROM permissions WHERE key LIKE 'processes:%'")
-            .fetch_one(&pool)
-            .await?;
-    assert_eq!(
-        process_permissions, 0,
-        "revert must remove the process permission catalog rows"
-    );
-    let scope_key: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM pg_constraint WHERE conname = 'work_items_scope_id_key'",
-    )
-    .fetch_one(&pool)
-    .await?;
-    assert_eq!(scope_key, 0, "revert must remove the composite FK target");
-    let work_items_exists: bool = sqlx::query_scalar(
-        "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'work_items')",
-    )
-    .fetch_one(&pool)
-    .await?;
-    assert!(
-        work_items_exists,
+        processes_exists,
         "revert of the newest migration must keep earlier migrations applied"
     );
     assert!(migrations::verify(&pool).await.is_err());
@@ -105,7 +106,9 @@ async fn changed_migration_checksum_is_rejected(
 async fn revert_preserves_dependent_data(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
     // A dependent object on the newest table must block rollback instead of
     // being dropped.
-    sqlx::query("CREATE TABLE migration_safety_probe (process_id uuid REFERENCES processes (id))")
+    sqlx::query(
+        "CREATE TABLE migration_safety_probe (execution_id uuid REFERENCES process_executions (id))",
+    )
         .execute(&pool)
         .await?;
     assert!(migrations::revert_last(&pool).await.is_err());

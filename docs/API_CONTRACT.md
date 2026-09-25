@@ -459,6 +459,47 @@ transaction (project → section/memberships → work item → grants → proces
 rows). No revision or pagination protocol; see
 [ADR 0015](decisions/0015-process-domain-foundation.md).
 
+# 10.3 Process executions (implemented — STEP 21A)
+
+Runtime attempt records — separate from the definitions above (ADR 0016).
+Base for transitions:
+`.../work-items/{work_item_id}/processes/{process_id}/executions`.
+
+| Method | Path | Input | Success |
+| --- | --- | --- | --- |
+| GET | `.../work-items/{work_item_id}/executions` | none | 200 `{data: ExecutionPublic[], server_time}` |
+| POST | `.../processes/{process_id}/executions` | optional `start_reason` | 201 `{data: ExecutionPublic, server_time}` |
+| POST | `.../processes/{process_id}/executions/{execution_id}/complete` | empty `{}` | 200 `{data: ExecutionPublic, server_time}` |
+| POST | `.../processes/{process_id}/executions/{execution_id}/cancel` | optional `cancel_reason` | 200 `{data: ExecutionPublic, server_time}` |
+
+Public fields: id, tenant/scoped ids, `attempt_no`, `status`
+(`active|completed|cancelled`), `started_at`, `completed_at`,
+`cancelled_at`, `start_reason`, `cancel_reason`, and the actor ids
+`started_by_user_id`/`completed_by_user_id`/`cancelled_by_user_id`.
+`server_time` is the DB clock at response time so clients can anchor the
+display-only timer without trusting their own clock.
+
+A process has 0..N immutable attempts; at most one is `active`. START
+inserts the next attempt (`attempt_no = MAX+1`) — retry is a new attempt,
+never a resurrection. COMPLETE/CANCEL apply only to the `active` attempt
+and make it terminal-immutable; repeating a terminal transition or
+starting a second concurrent attempt is `409 STATE_CONFLICT`. Reasons are
+trimmed, empty→NULL, ≤500 chars (`422` otherwise). Clients may not supply
+scope ids, actor ids, timestamps, `attempt_no` or `status` — unknown
+fields are 400.
+
+Permissions are decomposed: `process_executions:start`,
+`process_executions:complete`, `process_executions:cancel`; the read list
+follows the existing work-item read eligibility (both memberships). Owner
+and built-in Member both carry the three organization-scoped execution
+grants — Member gains no administrative permissions, and workspace
+membership is still required. Every transition revalidates the full
+parent chain, both memberships and the permission inside the write
+transaction. Error ordering: 401 → 404 → 403 → 400/422 → 409. Archiving
+any ancestor (process, work item, section subtree, project) that still
+contains an active execution fails `409`. See
+[ADR 0016](decisions/0016-process-execution.md).
+
 # 11. Cards
 
 ``` text

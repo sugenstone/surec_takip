@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiRequestError } from './client';
 import {
+  executionErrorMessageKey,
   loginErrorMessageKey,
   organizationErrorMessageKey,
   processErrorMessageKey,
@@ -192,5 +193,24 @@ describe('process error mapping', () => {
         ),
       ).toBe(`processes.error.${key}`);
     }
+  });
+});
+
+describe('execution error mapping', () => {
+  it('maps status codes without inspecting server messages', () => {
+    for (const [code, key] of [
+      ['VALIDATION_ERROR', 'validation'],
+      ['STATE_CONFLICT', 'conflict'],
+      ['PERMISSION_DENIED', 'forbidden'],
+      ['RESOURCE_NOT_FOUND', 'notFound'],
+      ['AUTH_REQUIRED', 'auth'],
+      ['NETWORK_ERROR', 'network'],
+      ['INTERNAL_ERROR', 'unexpected'],
+    ]) {
+      expect(
+        executionErrorMessageKey(new ApiRequestError(409, code, 'misleading message', '')),
+      ).toBe(`executions.error.${key}`);
+    }
+    expect(executionErrorMessageKey(new Error('x'))).toBe('executions.error.unexpected');
   });
 });

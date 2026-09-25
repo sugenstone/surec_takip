@@ -140,3 +140,25 @@ export function processErrorMessageKey(error: unknown): TranslationKey {
   }
   return 'processes.error.unexpected';
 }
+
+// Execution transitions distinguish a stale state (STATE_CONFLICT — another
+// actor already finished the attempt) from field validation (reason bounds).
+export function executionErrorMessageKey(error: unknown): TranslationKey {
+  if (error instanceof ApiRequestError) {
+    switch (error.code) {
+      case 'VALIDATION_ERROR':
+        return 'executions.error.validation';
+      case 'STATE_CONFLICT':
+        return 'executions.error.conflict';
+      case 'PERMISSION_DENIED':
+        return 'executions.error.forbidden';
+      case 'RESOURCE_NOT_FOUND':
+        return 'executions.error.notFound';
+      case 'AUTH_REQUIRED':
+        return 'executions.error.auth';
+      case 'NETWORK_ERROR':
+        return 'executions.error.network';
+    }
+  }
+  return 'executions.error.unexpected';
+}

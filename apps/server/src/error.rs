@@ -17,6 +17,9 @@ pub enum ErrorCode {
     PermissionDenied,
     InvitationInvalid,
     ValidationError,
+    /// Domain state conflict: the resource exists and is visible, but its
+    /// current state does not allow the requested transition (ADR 0016).
+    StateConflict,
     InternalError,
 }
 
@@ -73,6 +76,10 @@ impl ApiError {
             ErrorCode::ValidationError => {
                 (StatusCode::UNPROCESSABLE_ENTITY, "Some fields are invalid.")
             }
+            ErrorCode::StateConflict => (
+                StatusCode::CONFLICT,
+                "The current state does not allow this operation.",
+            ),
             ErrorCode::InternalError => (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "An unexpected error occurred.",

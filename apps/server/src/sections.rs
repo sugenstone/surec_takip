@@ -62,6 +62,9 @@ pub enum SectionError {
     /// section itself (self-parenting is invalid).
     InvalidParent,
     CycleDetected,
+    /// Archiving is blocked while an active process execution exists
+    /// anywhere in the section subtree (ADR 0016).
+    StateConflict,
     DatabaseError,
 }
 
@@ -74,6 +77,7 @@ impl std::fmt::Display for SectionError {
             SectionError::InvalidTransition => "status transition is not allowed",
             SectionError::InvalidParent => "parent section is invalid",
             SectionError::CycleDetected => "reparenting would create a cycle",
+            SectionError::StateConflict => "state conflict",
             SectionError::DatabaseError => "database operation failed",
         };
         formatter.write_str(message)
@@ -448,6 +452,25 @@ pub async fn update_section(
     .await?
     .ok_or(SectionError::NotAccessible)?;
 
+    // ADR 0016: archiving a section is blocked while ANY work item under the
+    // target OR any descendant section carries an active process execution.
+    // The subtree walk mirrors `is_self_or_descendant` (cycle-safe UNION);
+    // the project lock already held serializes this against racing STARTs.
+    if patch.status.as_deref() == Some(SECTION_STATUS_ARCHIVED)
+        && current.status != SECTION_STATUS_ARCHIVED
+        && crate::process_executions::active_execution_exists_for_section_subtree(
+            &mut transaction,
+            organization_id,
+            workspace_id,
+            project_id,
+            section_id,
+        )
+        .await
+        .map_err(|_| SectionError::DatabaseError)?
+    {
+        return Err(SectionError::StateConflict);
+    }
+
     let parent = match patch.parent {
         ParentPatch::Keep => current.parent_section_id,
         ParentPatch::Root => None,
@@ -719,6 +742,9 @@ pub async fn create_section_handler(
             serde_json::json!({ "status": ["Invalid transition"] }),
             request_id.0,
         )),
+        Err(SectionError::StateConflict) => {
+            Err(ApiError::new(ErrorCode::StateConflict, request_id.0))
+        }
         Err(SectionError::DatabaseError) => {
             Err(ApiError::new(ErrorCode::InternalError, request_id.0))
         }
@@ -907,6 +933,9 @@ pub async fn update_section_handler(
             serde_json::json!({ "status": ["Invalid transition"] }),
             request_id.0,
         )),
+        Err(SectionError::StateConflict) => {
+            Err(ApiError::new(ErrorCode::StateConflict, request_id.0))
+        }
         Err(SectionError::DatabaseError) => {
             Err(ApiError::new(ErrorCode::InternalError, request_id.0))
         }

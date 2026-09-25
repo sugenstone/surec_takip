@@ -81,6 +81,8 @@ pub enum ProcessError {
     NotAccessible,
     Forbidden,
     InvalidFields(serde_json::Value),
+    /// Archiving is blocked while an active execution exists (ADR 0016).
+    StateConflict,
     DatabaseError,
 }
 impl std::fmt::Display for ProcessError {
@@ -89,6 +91,7 @@ impl std::fmt::Display for ProcessError {
             Self::NotAccessible => "resource not found",
             Self::Forbidden => "permission denied",
             Self::InvalidFields(_) => "invalid fields",
+            Self::StateConflict => "state conflict",
             Self::DatabaseError => "database operation failed",
         })
     }
@@ -114,6 +117,9 @@ fn api_error(error: ProcessError, request_id: &RequestId) -> ApiError {
         ProcessError::Forbidden => rbac::permission_denied(request_id),
         ProcessError::InvalidFields(fields) => {
             ApiError::invalid_fields(fields, request_id.0.clone())
+        }
+        ProcessError::StateConflict => {
+            ApiError::new(ErrorCode::StateConflict, request_id.0.clone())
         }
         ProcessError::DatabaseError => {
             ApiError::new(ErrorCode::InternalError, request_id.0.clone())
@@ -218,7 +224,7 @@ pub async fn visible_for_work_item(
 /// FOR SHARE → work item FOR SHARE → permission support rows FOR SHARE →
 /// process rows FOR UPDATE. The project lock serializes all writes in the
 /// project, so appends and reorders cannot interleave.
-async fn lock_parent(
+pub(crate) async fn lock_parent(
     tx: &mut PgConnection,
     scope: ProcessScope,
     actor: Uuid,
@@ -344,6 +350,15 @@ pub async fn update_process(
         .unwrap_or(&current.status);
     if status == "archived" {
         require_permission(&mut tx, scope, actor, PROCESSES_ARCHIVE).await?;
+        // ADR 0016: a process with an ACTIVE execution cannot be archived;
+        // the guard runs under the same project serialization as START.
+        if current.status != "archived"
+            && crate::process_executions::active_execution_exists_for_process(&mut tx, scope, id)
+                .await
+                .map_err(database_error)?
+        {
+            return Err(ProcessError::StateConflict);
+        }
     }
     if !matches!(status, "active" | "archived") {
         return Err(invalid("status"));

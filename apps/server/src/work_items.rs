@@ -48,6 +48,8 @@ pub enum WorkItemError {
     NotAccessible,
     Forbidden,
     InvalidFields(serde_json::Value),
+    /// Archiving is blocked while an active process execution exists (ADR 0016).
+    StateConflict,
     DatabaseError,
 }
 impl std::fmt::Display for WorkItemError {
@@ -56,6 +58,7 @@ impl std::fmt::Display for WorkItemError {
             Self::NotAccessible => "resource not found",
             Self::Forbidden => "permission denied",
             Self::InvalidFields(_) => "invalid fields",
+            Self::StateConflict => "state conflict",
             Self::DatabaseError => "database operation failed",
         })
     }
@@ -81,6 +84,9 @@ fn api_error(error: WorkItemError, request_id: &RequestId) -> ApiError {
         WorkItemError::Forbidden => rbac::permission_denied(request_id),
         WorkItemError::InvalidFields(fields) => {
             ApiError::invalid_fields(fields, request_id.0.clone())
+        }
+        WorkItemError::StateConflict => {
+            ApiError::new(ErrorCode::StateConflict, request_id.0.clone())
         }
         WorkItemError::DatabaseError => {
             ApiError::new(ErrorCode::InternalError, request_id.0.clone())
@@ -278,6 +284,15 @@ pub async fn update_work_item(
     require_permission(&mut tx, scope, actor, WORK_ITEMS_UPDATE).await?;
     if input.status.as_deref().map(str::trim) == Some("archived") {
         require_permission(&mut tx, scope, actor, WORK_ITEMS_ARCHIVE).await?;
+        // ADR 0016: a work item carrying an ACTIVE execution cannot be
+        // archived; the check shares the project serialization used by START.
+        if current.status != "archived"
+            && crate::process_executions::active_execution_exists_for_work_item(&mut tx, scope, id)
+                .await
+                .map_err(database_error)?
+        {
+            return Err(WorkItemError::StateConflict);
+        }
     }
     let name = match &input.name {
         Some(v) => name_value(v)?,

@@ -300,3 +300,53 @@ export async function reorderProcesses(
   });
   return body.data;
 }
+
+// Process EXECUTIONS (STEP 21A / ADR 0016): immutable operational attempts.
+// Timestamps and `server_time` come from the database clock; the client never
+// sends times, actor ids, scope ids, attempt numbers, or status.
+export type ExecutionPublic = components['schemas']['ExecutionPublic'];
+export type ExecutionScope = ProcessScope & { processId: string };
+export function workItemExecutionsPath(scope: ProcessScope): string {
+  return `${workItemsPath(scope)}/${scope.workItemId}/executions`;
+}
+export function executionsPath(scope: ExecutionScope): string {
+  return `${processesPath(scope)}/${scope.processId}/executions`;
+}
+export async function listWorkItemExecutions(
+  scope: ProcessScope,
+): Promise<{ data: ExecutionPublic[]; server_time: string }> {
+  return request<{ data: ExecutionPublic[]; server_time: string }>(workItemExecutionsPath(scope));
+}
+export async function startExecution(
+  scope: ExecutionScope,
+  input: components['schemas']['StartExecutionRequest'] = {},
+): Promise<{ data: ExecutionPublic; server_time: string }> {
+  return request<{ data: ExecutionPublic; server_time: string }>(executionsPath(scope), {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+}
+export async function completeExecution(
+  scope: ExecutionScope,
+  executionId: string,
+): Promise<{ data: ExecutionPublic; server_time: string }> {
+  return request<{ data: ExecutionPublic; server_time: string }>(
+    `${executionsPath(scope)}/${executionId}/complete`,
+    { method: 'POST' },
+  );
+}
+export async function cancelExecution(
+  scope: ExecutionScope,
+  executionId: string,
+  input: components['schemas']['CancelExecutionRequest'] = {},
+): Promise<{ data: ExecutionPublic; server_time: string }> {
+  return request<{ data: ExecutionPublic; server_time: string }>(
+    `${executionsPath(scope)}/${executionId}/cancel`,
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+}

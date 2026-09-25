@@ -642,7 +642,8 @@ dialog h2 {
   margin-block: var(--space-3) var(--space-2);
 }
 .app-content :is(input, textarea, select),
-.form-drawer :is(input, textarea, select) {
+.form-drawer :is(input, textarea, select),
+dialog :is(input, textarea, select) {
   width: 100%;
   min-width: 0;
   max-width: 100%;
@@ -658,12 +659,14 @@ dialog h2 {
     box-shadow 0.15s ease;
 }
 .app-content :is(input, textarea, select):focus-visible,
-.form-drawer :is(input, textarea, select):focus-visible {
+.form-drawer :is(input, textarea, select):focus-visible,
+dialog :is(input, textarea, select):focus-visible {
   border-color: var(--primary);
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
 }
-.form-drawer label:not(.sr-only) {
+.form-drawer label:not(.sr-only),
+dialog label:not(.sr-only) {
   display: block;
   font-size: var(--text-small);
   font-weight: 600;
@@ -1119,6 +1122,116 @@ dialog .menu-item {
   font-weight: 600;
   margin-block-end: var(--space-1);
 }
+
+/* Execution surface: a full-width strip inside the process row showing the
+   runtime state (separate from the definition columns above it). */
+.exec-bar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+  border-block-start: 1px solid var(--border-subtle);
+  padding-block-start: var(--space-2);
+}
+.exec-state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--muted-foreground);
+}
+.exec-state.exec-active {
+  color: var(--primary);
+}
+.exec-state.exec-done {
+  color: var(--success, var(--primary));
+}
+.exec-state.exec-cancelled {
+  color: var(--muted-foreground);
+}
+.exec-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: var(--radius-pill);
+  background: currentcolor;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .exec-dot {
+    animation: exec-pulse 1.6s ease-in-out infinite;
+  }
+}
+@keyframes exec-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.exec-timer {
+  font-family: var(--font-mono);
+  font-size: var(--text-small);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.exec-duration,
+.exec-attempt-status {
+  font-size: var(--text-small);
+}
+.exec-buttons {
+  display: inline-flex;
+  gap: var(--space-2);
+}
+.app-content .exec-btn {
+  min-height: 2rem;
+  padding-block: 0;
+  font-size: var(--text-small);
+}
+.exec-history {
+  margin-inline-start: auto;
+  font-size: var(--text-small);
+}
+.exec-history > summary {
+  cursor: pointer;
+  color: var(--muted-foreground);
+  font-weight: 600;
+}
+.exec-history > summary:hover {
+  color: var(--foreground);
+}
+.exec-attempts {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  inline-size: 100%;
+}
+.exec-attempt {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--text-caption);
+}
+.exec-attempt-label {
+  font-weight: 600;
+}
+.exec-attempt[data-status='active'] .exec-attempt-status {
+  color: var(--primary);
+  font-weight: 600;
+}
+.exec-attempt[data-status='completed'] .exec-attempt-status {
+  color: var(--success, var(--primary));
+}
+.exec-reason {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
+}
 @media (max-width: 40rem) {
   /* Narrow screens: badge and actions wrap under the name instead of
      squeezing it; the order number stays as the leading column. */
@@ -1135,6 +1248,10 @@ dialog .menu-item {
     justify-content: flex-end;
     border-block-start: 1px solid var(--border-subtle);
     padding-block-start: var(--space-1);
+  }
+  .exec-history {
+    margin-inline-start: 0;
+    flex-basis: 100%;
   }
 }
 

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   let {
     open,
     title,
@@ -9,6 +10,7 @@
     error = '',
     onConfirm,
     onCancel,
+    children,
   }: {
     open: boolean;
     title: string;
@@ -19,6 +21,7 @@
     error?: string;
     onConfirm: () => void;
     onCancel: () => void;
+    children?: Snippet;
   } = $props();
   let dialog: HTMLDialogElement;
   const id = $props.id();
@@ -40,6 +43,7 @@
 >
   <h2 id="{id}-title">{title}</h2>
   <p id="{id}-description">{description}</p>
+  {#if children}{@render children()}{/if}
   {#if error}<p class="error" role="alert">{error}</p>{/if}
   <div class="button-row">
     <button type="button" class="secondary" disabled={pending} onclick={onCancel}

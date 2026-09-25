@@ -9,8 +9,16 @@
   import SectionBreadcrumbs from '$lib/ui/SectionBreadcrumbs.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import { translate, type TranslationKey } from '$lib/i18n';
-  import { reorderProcesses, updateProcess, type ProcessPublic } from '$lib/api/client';
-  import { processErrorMessageKey } from '$lib/api/errors';
+  import {
+    cancelExecution,
+    completeExecution,
+    reorderProcesses,
+    startExecution,
+    updateProcess,
+    type ExecutionPublic,
+    type ProcessPublic,
+  } from '$lib/api/client';
+  import { executionErrorMessageKey, processErrorMessageKey } from '$lib/api/errors';
   import WorkItemForm from '$lib/work-items/WorkItemForm.svelte';
   import ProcessForm from '$lib/processes/ProcessForm.svelte';
   import ProcessRow from '$lib/processes/ProcessRow.svelte';
@@ -27,6 +35,18 @@
   let canUpdate = $derived(data.permissions.includes('processes:update'));
   let canArchive = $derived(data.permissions.includes('processes:archive'));
   let canReorder = $derived(data.permissions.includes('processes:reorder'));
+  // Execution permissions are backend-enforced; these only gate visibility.
+  let canExecStart = $derived(data.permissions.includes('process_executions:start'));
+  let canExecComplete = $derived(data.permissions.includes('process_executions:complete'));
+  let canExecCancel = $derived(data.permissions.includes('process_executions:cancel'));
+  // Attempts grouped per process definition, attempt_no ascending (API order).
+  let attemptsByProcess = $derived.by(() => {
+    const map: Record<string, ExecutionPublic[]> = {};
+    for (const attempt of data.executions) (map[attempt.process_id] ??= []).push(attempt);
+    return map;
+  });
+  let cancelling = $state<ExecutionPublic | null>(null);
+  let cancelReason = $state('');
 
   // SSR renders management controls before their handlers are attached.
   let ready = $state(false);
@@ -49,7 +69,10 @@
     if (archiving && archiving.work_item_id !== id) archiving = null;
   });
 
-  async function run(action: () => Promise<unknown>): Promise<boolean> {
+  async function run(
+    action: () => Promise<unknown>,
+    mapError: (cause: unknown) => TranslationKey = processErrorMessageKey,
+  ): Promise<boolean> {
     if (pending) return false;
     errorFor = null;
     pending = true;
@@ -58,11 +81,47 @@
       await invalidateAll();
       return true;
     } catch (cause) {
-      const key: TranslationKey = processErrorMessageKey(cause);
+      const key: TranslationKey = mapError(cause);
       errorFor = { id: data.item.id, message: translate(locale, key) };
       return false;
     } finally {
       pending = false;
+    }
+  }
+
+  // Execution transitions (ADR 0016): the server writes all scope/actor/time
+  // fields; the client sends at most an optional bounded reason.
+  async function startAttempt(process: ProcessPublic) {
+    await run(
+      () => startExecution({ ...data.processScope, processId: process.id }),
+      executionErrorMessageKey,
+    );
+  }
+  async function completeAttempt(execution: ExecutionPublic) {
+    await run(
+      () =>
+        completeExecution({ ...data.processScope, processId: execution.process_id }, execution.id),
+      executionErrorMessageKey,
+    );
+  }
+  function askCancel(execution: ExecutionPublic) {
+    errorFor = null;
+    cancelReason = '';
+    cancelling = execution;
+  }
+  async function confirmCancel() {
+    const target = cancelling;
+    if (!target) return;
+    const ok = await run(
+      () =>
+        cancelExecution({ ...data.processScope, processId: target.process_id }, target.id, {
+          cancel_reason: cancelReason,
+        }),
+      executionErrorMessageKey,
+    );
+    if (ok) {
+      cancelling = null;
+      cancelReason = '';
     }
   }
 
@@ -96,6 +155,14 @@
     if (!target) return;
     if (await run(() => updateProcess(data.processScope, target.id, { status: 'archived' })))
       archiving = null;
+  }
+
+  function processNameOf(execution: ExecutionPublic | null): string {
+    return (
+      data.processes.find((process) => process.id === execution?.process_id)?.name ??
+      execution?.process_id ??
+      ''
+    );
   }
 </script>
 
@@ -177,12 +244,26 @@
               {canUpdate}
               {canArchive}
               {canReorder}
+              canStart={canExecStart}
+              canComplete={canExecComplete}
+              canCancel={canExecCancel}
+              attempts={attemptsByProcess[process.id] ?? []}
+              serverTime={data.serverTime}
               disabled={!ready || pending}
               onMove={(delta) => move(process, delta)}
               onEdit={() => (editing = process)}
               onArchive={() => {
                 errorFor = null;
                 archiving = process;
+              }}
+              onStart={() => startAttempt(process)}
+              onComplete={(id) => {
+                const target = attemptsByProcess[process.id]?.find((attempt) => attempt.id === id);
+                if (target) void completeAttempt(target);
+              }}
+              onCancel={(id) => {
+                const target = attemptsByProcess[process.id]?.find((attempt) => attempt.id === id);
+                if (target) askCancel(target);
               }}
             />
           </li>
@@ -270,3 +351,32 @@
   }}
   onConfirm={confirmArchive}
 />
+
+<ConfirmDialog
+  open={cancelling !== null}
+  title={translate(locale, 'executions.cancel.title')}
+  description={translate(locale, 'executions.cancel.description', {
+    name: processNameOf(cancelling),
+  })}
+  confirmLabel={translate(locale, 'executions.cancel.submit')}
+  cancelLabel={translate(locale, 'processes.cancel')}
+  {pending}
+  error={cancelling ? (error ?? '') : ''}
+  onCancel={() => {
+    cancelling = null;
+    cancelReason = '';
+    errorFor = null;
+  }}
+  onConfirm={confirmCancel}
+>
+  <label class="field">
+    <span>{translate(locale, 'executions.cancel.reasonLabel')}</span>
+    <input
+      type="text"
+      maxlength="500"
+      bind:value={cancelReason}
+      disabled={pending}
+      autocomplete="off"
+    />
+  </label>
+</ConfirmDialog>

@@ -5,9 +5,10 @@ PostgreSQL doğruluk kaynağıdır. Varsayılan arayüz dili tr-TR, ikinci dil e
 
 **Durum:** Generic SaaS foundation ve starter extraction tamamlandı.
 Projects (STEP 17), recursive Sections (STEP 18), Work Items (STEP 19) ve
-STEP 19.5 frontend ürün deneyimi mevcut. STEP 20 Process tanımları (sıralı,
-zorunlu/opsiyonel yapılandırma) yerel review aşamasında. Süreç yürütme,
-timer, atama ve ilerleme henüz uygulanmadı.
+STEP 19.5 frontend ürün deneyimi mevcut. STEP 20 Process tanımları ve
+STEP 21A Process execution core (başlat/tamamla/iptal, immutable deneme
+geçmişi) yerel review aşamasında. İlerleme, atama, pause/resume ve
+realtime henüz uygulanmadı.
 
 ## Bağlayıcı belgeler
 
@@ -32,6 +33,7 @@ timer, atama ve ilerleme henüz uygulanmadı.
 - [Work Items foundation](docs/decisions/0013-work-items-domain-foundation.md)
 - [Frontend ürün deneyimi](docs/decisions/0014-frontend-product-experience.md)
 - [Process domain foundation](docs/decisions/0015-process-domain-foundation.md)
+- [Process execution](docs/decisions/0016-process-execution.md)
 
 ## Mevcut yapı
 
@@ -238,12 +240,23 @@ değişkeni ayarlamaz. Üye test fixture'ı yalnız bu geçici veritabanında ku
 Süreçler bir işçiliğin sıralı **tanımlarıdır** (ör. Taş Alımı → Kesim →
 İmalat → Nakliye → Montaj) ve işçilik detay sayfasındaki "Süreçler"
 bölümünde yönetilir: oluştur/düzenle (drawer), zorunlu/opsiyonel, erişilebilir
-yukarı/aşağı sıralama ve onaylı arşiv. Yalnız yapılandırmadır; yürütme,
-timer, atama veya ilerleme içermez (ADR 0015). Backend tam üst zinciri
-doğrular; `processes:create/update/archive/reorder` ayrı izinlerdir. Sıra
-sunucu tarafında tam permütasyon olarak doğrulanır ve aktif pozisyonlar DB
-seviyesinde tekildir. `npm run test:db` `processes` target'ını içerir; E2E
-runner izole bir Processes kullanıcısı ekler.
+yukarı/aşağı sıralama ve onaylı arşiv. `processes:create/update/archive/
+reorder` ayrı izinlerdir; sıra sunucu tarafında tam permütasyon olarak
+doğrulanır ve aktif pozisyonlar DB seviyesinde tekildir (ADR 0015).
+
+Yürütme (STEP 21A, ADR 0016) ayrı kayıtlardır: `process_executions`
+tablosu her denemeyi (attempt) immutable saklar — `active | completed |
+cancelled`, işlem başına en fazla bir aktif deneme, pending = aktif deneme
+yoktur. Başlat/Tamamla/İptal ve Tekrar Başlat işçilik sayfasındaki süreç
+satırındadır; iptal isteğe bağlı nedeniyle onaylanır. Zamanlar PostgreSQL
+`now()` ile yazılır — canlı timer yalnızca görüntüdür, `started_at` +
+`server_time` anchor'ıyla yerel tick eder (saniyede yazma yok).
+`process_executions:start/complete/cancel` ayrı izinlerdir; Owner ve
+yerleşik Member üçüne de organization-scope sahiptir (Member'a
+administrative yetki verilmez, workspace üyeliği yine şarttır). Aktif
+deneme varken process/work item/section (alt ağaç dahil)/project arşivi
+409 ile reddedilir. `npm run test:db` `process_executions` target'ını
+içerir; E2E runner izole bir Processes kullanıcısı ekler.
 
 ## Dil ve tema foundation
 
@@ -297,7 +310,10 @@ kardeş-kapsamı slug partial unique + `sections:*` izinleri ve Owner grant
 backfill (ADR 0012); `009` work_items — section-scoped composite FK, hard slug
 unique, ordering ve `work_items:*` grant backfill (ADR 0013); `010` processes —
 work-item-scoped composite FK, hard slug unique, aktif pozisyon partial unique
-ve `processes:*` grant backfill (ADR 0015). SQLx
+ve `processes:*` grant backfill (ADR 0015); `011` process_executions —
+immutable deneme kayıtları, composite process FK, tek aktif deneme partial
+unique, terminal-state CHECK'leri ve `process_executions:*` grant backfill
+(Owner + Member, organization scope) (ADR 0016). SQLx
 `_sqlx_migrations` tablosunda version/checksum tutar. Uygulanmış SQL dosyası
 sonradan değiştirilmez; yeni migration eklenir. Dosyalar LF satır sonuyla tutulur.
 

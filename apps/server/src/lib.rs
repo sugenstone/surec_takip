@@ -8,6 +8,7 @@ pub mod migrations;
 pub mod organizations;
 pub mod password;
 pub mod permissions;
+pub mod process_executions;
 pub mod processes;
 pub mod projects;
 pub mod rbac;
@@ -150,6 +151,12 @@ pub fn router(state: AppState) -> Router {
         // Static segment: matched ahead of the {process_id} parameter route.
         .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/reorder", patch(processes::reorder_processes_handler))
         .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}", get(processes::get_process).patch(processes::update_process_handler))
+        // STEP 21A (ADR 0016): execution attempts — start under the process,
+        // terminal transitions under the execution, history under the work item.
+        .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/executions", get(process_executions::list_work_item_executions))
+        .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/executions", post(process_executions::start_execution_handler))
+        .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/executions/{execution_id}/complete", post(process_executions::complete_execution_handler))
+        .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/executions/{execution_id}/cancel", post(process_executions::cancel_execution_handler))
         .fallback(not_found)
         .method_not_allowed_fallback(method_not_allowed)
         .layer(middleware::from_fn(request_context))
@@ -249,6 +256,10 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         processes::reorder_processes_handler,
         processes::get_process,
         processes::update_process_handler,
+        process_executions::start_execution_handler,
+        process_executions::list_work_item_executions,
+        process_executions::complete_execution_handler,
+        process_executions::cancel_execution_handler,
         sections::update_section_handler,
         permissions::effective_workspace_permissions,
         organizations::list_permissions,
@@ -296,6 +307,11 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         processes::ProcessPublic,
         processes::ProcessMutationResponse,
         processes::ProcessListResponse,
+        process_executions::StartExecutionRequest,
+        process_executions::CancelExecutionRequest,
+        process_executions::ExecutionPublic,
+        process_executions::ExecutionMutationResponse,
+        process_executions::ExecutionListResponse,
         organizations::PermissionPublic,
         organizations::PermissionListResponse,
         organizations::RolePublic,

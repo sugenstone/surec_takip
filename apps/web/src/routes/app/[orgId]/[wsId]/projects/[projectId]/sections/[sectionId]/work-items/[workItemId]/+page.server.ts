@@ -2,7 +2,9 @@ import type { PageServerLoad } from './$types';
 import { error, redirect } from '@sveltejs/kit';
 import {
   processesPath,
+  workItemExecutionsPath,
   workItemsPath,
+  type ExecutionPublic,
   type ProcessPublic,
   type ProcessScope,
   type WorkItemPublic,
@@ -15,9 +17,10 @@ export const load: PageServerLoad = async ({ params, parent, cookies, fetch }) =
   // The URL work item id is only a lookup key: both requests resolve through
   // the backend's full parent chain, which stays the authorization boundary.
   const processScope: ProcessScope = { ...workItemScope, workItemId: params.workItemId };
-  const [response, processesResponse] = await Promise.all([
+  const [response, processesResponse, executionsResponse] = await Promise.all([
     fetch(`${API_ORIGIN}${workItemsPath(workItemScope)}/${params.workItemId}`, { headers }),
     fetch(`${API_ORIGIN}${processesPath(processScope)}`, { headers }).catch(() => null),
+    fetch(`${API_ORIGIN}${workItemExecutionsPath(processScope)}`, { headers }).catch(() => null),
   ]);
   if (response.status === 401) redirect(307, '/login');
   if (response.status === 404) error(404);
@@ -27,10 +30,22 @@ export const load: PageServerLoad = async ({ params, parent, cookies, fetch }) =
   if (processesResponse?.ok) {
     processes = ((await processesResponse.json()) as { data: ProcessPublic[] }).data;
   }
+  let executions: ExecutionPublic[] = [];
+  let serverTime = '';
+  if (executionsResponse?.ok) {
+    const body = (await executionsResponse.json()) as {
+      data: ExecutionPublic[];
+      server_time: string;
+    };
+    executions = body.data;
+    serverTime = body.server_time;
+  }
   return {
     item: (await response.json()) as WorkItemPublic,
     processScope,
     processes,
     processesFailed,
+    executions,
+    serverTime,
   };
 };

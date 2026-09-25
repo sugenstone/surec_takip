@@ -1,12 +1,13 @@
 <script lang="ts">
-  // One ordered process DEFINITION. Real data only: order, name, optional
-  // description and the required/optional flag. There is deliberately no
-  // execution state here (no progress, timer or assignee) — future execution
-  // metadata gets its own slot once real data exists (ADR 0015).
+  // One ordered process DEFINITION plus its execution surface (ADR 0016):
+  // real attempt history from the API only — no fake timers, assignees or
+  // progress. The live timer is display-only: it derives elapsed time from
+  // the server-provided `started_at`/`serverTime` anchor and ticks locally
+  // (no per-second writes, client clock skew is corrected by the anchor).
   import ActionMenu, { type MenuItem } from '@platform/ui/ActionMenu.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import { translate, type Locale } from '$lib/i18n';
-  import type { ProcessPublic } from '$lib/api/client';
+  import type { ExecutionPublic, ProcessPublic } from '$lib/api/client';
   let {
     process,
     index,
@@ -15,10 +16,18 @@
     canUpdate,
     canArchive,
     canReorder,
+    canStart,
+    canComplete,
+    canCancel,
+    attempts,
+    serverTime,
     disabled,
     onMove,
     onEdit,
     onArchive,
+    onStart,
+    onComplete,
+    onCancel,
   }: {
     process: ProcessPublic;
     index: number;
@@ -27,10 +36,18 @@
     canUpdate: boolean;
     canArchive: boolean;
     canReorder: boolean;
+    canStart: boolean;
+    canComplete: boolean;
+    canCancel: boolean;
+    attempts: ExecutionPublic[];
+    serverTime: string;
     disabled: boolean;
     onMove: (delta: -1 | 1) => void;
     onEdit: () => void;
     onArchive: () => void;
+    onStart: () => void;
+    onComplete: (id: string) => void;
+    onCancel: (id: string) => void;
   } = $props();
   const vars = $derived({ name: process.name });
   const menuItems = $derived.by<MenuItem[]>(() => {
@@ -42,6 +59,44 @@
     ];
     return items.filter((item): item is MenuItem => item !== null);
   });
+
+  const active = $derived(attempts.find((a) => a.status === 'active'));
+  const latest = $derived(attempts[attempts.length - 1]);
+  const terminal = $derived(latest && latest.status !== 'active' ? latest : undefined);
+
+  // Timer anchor: elapsed at the moment `serverTime` was generated. Every
+  // invalidation delivers a fresh server_time, re-anchoring the local tick.
+  let now = $state(Date.now());
+  let anchoredAt = $state(Date.now());
+  $effect(() => {
+    if (!active) return;
+    anchoredAt = Date.now();
+    now = anchoredAt;
+    const timer = setInterval(() => (now = Date.now()), 1000);
+    return () => clearInterval(timer);
+  });
+  const elapsedMs = $derived(
+    active
+      ? Math.max(0, Date.parse(serverTime) - Date.parse(active.started_at) + (now - anchoredAt))
+      : 0,
+  );
+  function formatDuration(ms: number): string {
+    const total = Math.floor(ms / 1000);
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  }
+  function terminalDuration(attempt: ExecutionPublic): string {
+    const end = Date.parse(attempt.completed_at ?? attempt.cancelled_at ?? '');
+    const start = Date.parse(attempt.started_at);
+    return formatDuration(Math.max(0, end - start));
+  }
+  function shortTime(iso: string | null | undefined): string {
+    if (!iso) return '';
+    // ISO-8601 UTC "…T17:04:32Z" → display the HH:MM:SS wall time.
+    return iso.slice(11, 19);
+  }
 </script>
 
 <article class="process-row" data-process-id={process.id}>
@@ -85,4 +140,106 @@
       {/if}
     </div>
   {/if}
+
+  <div class="exec-bar" data-testid="exec-bar-{process.id}">
+    {#if active}
+      <span class="exec-state exec-active">
+        <span class="exec-dot" aria-hidden="true"></span>
+        {translate(locale, 'executions.inProgress')}
+      </span>
+      <span
+        class="exec-timer"
+        role="timer"
+        aria-label={translate(locale, 'executions.timer.elapsed', {
+          time: formatDuration(elapsedMs),
+        })}
+        data-testid="exec-timer">{formatDuration(elapsedMs)}</span
+      >
+      <span class="exec-buttons">
+        {#if canComplete}
+          <button
+            type="button"
+            class="secondary exec-btn"
+            {disabled}
+            onclick={() => onComplete(active.id)}>{translate(locale, 'executions.complete')}</button
+          >
+        {/if}
+        {#if canCancel}
+          <button
+            type="button"
+            class="secondary exec-btn"
+            {disabled}
+            onclick={() => onCancel(active.id)}>{translate(locale, 'executions.cancel')}</button
+          >
+        {/if}
+      </span>
+    {:else}
+      {#if terminal}
+        <span
+          class="exec-state"
+          class:exec-done={terminal.status === 'completed'}
+          class:exec-cancelled={terminal.status === 'cancelled'}
+        >
+          {translate(
+            locale,
+            terminal.status === 'completed' ? 'executions.completed' : 'executions.cancelled',
+          )}
+        </span>
+        {#if terminal.status === 'completed'}
+          <span class="exec-duration muted">
+            {translate(locale, 'executions.duration')}: {terminalDuration(terminal)}
+          </span>
+        {/if}
+      {/if}
+      {#if canStart}
+        <button type="button" class="secondary exec-btn" {disabled} onclick={onStart}>
+          {translate(locale, terminal ? 'executions.retryStart' : 'executions.start')}
+        </button>
+      {/if}
+    {/if}
+    {#if attempts.length > 0}
+      <details class="exec-history">
+        <summary
+          >{translate(locale, 'executions.attempts', { count: String(attempts.length) })}</summary
+        >
+        <ul class="exec-attempts">
+          {#each attempts as attempt (attempt.id)}
+            <li class="exec-attempt" data-status={attempt.status}>
+              <span class="exec-attempt-label"
+                >{translate(locale, 'executions.attempt', { n: String(attempt.attempt_no) })}</span
+              >
+              <span class="exec-attempt-status"
+                >{translate(
+                  locale,
+                  attempt.status === 'active'
+                    ? 'executions.inProgress'
+                    : attempt.status === 'completed'
+                      ? 'executions.completed'
+                      : 'executions.cancelled',
+                )}</span
+              >
+              <span class="muted">
+                {translate(locale, 'executions.startedAt')}: {shortTime(attempt.started_at)}
+                {#if attempt.status !== 'active'}
+                  · {translate(locale, 'executions.finishedAt')}: {shortTime(
+                    attempt.completed_at ?? attempt.cancelled_at,
+                  )} · {terminalDuration(attempt)}
+                {/if}
+              </span>
+              {#if attempt.start_reason}
+                <span class="muted exec-reason"
+                  >{translate(locale, 'executions.startReason')}: {attempt.start_reason}</span
+                >
+              {/if}
+              {#if attempt.cancel_reason}
+                <span class="muted exec-reason"
+                  >{translate(locale, 'executions.cancelReason')}: {attempt.cancel_reason}</span
+                >
+              {/if}
+            </li>
+          {/each}
+        </ul>
+      </details>
+    {/if}
+  </div>
 </article>

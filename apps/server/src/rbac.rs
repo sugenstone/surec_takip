@@ -38,13 +38,14 @@ pub async fn bootstrap_builtin_roles(
     .fetch_one(&mut *transaction)
     .await
     .map_err(|_| ApiError::new(ErrorCode::InternalError, String::new()))?;
-    sqlx::query(
+    let member_role = sqlx::query_scalar::<_, Uuid>(
         "INSERT INTO roles (id, tenant_id, name, description, is_system) \
-         VALUES ($1, $2, 'member', 'Built-in member role (no additional permissions yet)', true)",
+         VALUES ($1, $2, 'member', 'Built-in member role (process execution permissions only)', true) \
+         RETURNING id",
     )
     .bind(Uuid::now_v7())
     .bind(tenant_id)
-    .execute(&mut *transaction)
+    .fetch_one(&mut *transaction)
     .await
     .map_err(|_| ApiError::new(ErrorCode::InternalError, String::new()))?;
     // Grants reference the permission catalog by stable key. Extending the
@@ -67,12 +68,33 @@ pub async fn bootstrap_builtin_roles(
         crate::processes::PROCESSES_UPDATE.0,
         crate::processes::PROCESSES_ARCHIVE.0,
         crate::processes::PROCESSES_REORDER.0,
+        crate::process_executions::PROCESS_EXECUTIONS_START.0,
+        crate::process_executions::PROCESS_EXECUTIONS_COMPLETE.0,
+        crate::process_executions::PROCESS_EXECUTIONS_CANCEL.0,
     ] {
         sqlx::query(
             "INSERT INTO role_permissions (role_id, permission_id, scope) \
              SELECT $1, p.id, 'organization' FROM permissions p WHERE p.key = $2",
         )
         .bind(owner_role)
+        .bind(key)
+        .execute(&mut *transaction)
+        .await
+        .map_err(|_| ApiError::new(ErrorCode::InternalError, String::new()))?;
+    }
+    // ADR 0016: built-in Members execute processes but administer nothing —
+    // exactly the three execution grants, organization scope, no writes to
+    // membership_roles. Workspace membership still gates eligibility.
+    for key in [
+        crate::process_executions::PROCESS_EXECUTIONS_START.0,
+        crate::process_executions::PROCESS_EXECUTIONS_COMPLETE.0,
+        crate::process_executions::PROCESS_EXECUTIONS_CANCEL.0,
+    ] {
+        sqlx::query(
+            "INSERT INTO role_permissions (role_id, permission_id, scope) \
+             SELECT $1, p.id, 'organization' FROM permissions p WHERE p.key = $2",
+        )
+        .bind(member_role)
         .bind(key)
         .execute(&mut *transaction)
         .await

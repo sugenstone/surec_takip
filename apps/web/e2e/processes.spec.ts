@@ -82,8 +82,9 @@ test('processes: owner defines, edits, reorders and archives ordered processes',
   await expect(nakliye).toContainText('Opsiyonel');
   await expect(processRegion(page).getByRole('listitem').first()).toContainText('01');
   await expect(processRegion(page).getByRole('listitem').first()).toContainText('Zorunlu');
-  // Configuration, not execution: no progress/timer/assignee affordances.
-  await expect(processRegion(page).getByText(/%|Başlat|Bitir|Süre:/)).toHaveCount(0);
+  // Execution (STEP 21A) adds Start controls, but no progress percentages,
+  // assignees or completion shortcuts exist yet.
+  await expect(processRegion(page).getByText(/%|Atanan|Assignee/i)).toHaveCount(0);
 
   // Deep link + reload keeps the persisted order.
   await page.reload();

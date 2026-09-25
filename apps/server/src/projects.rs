@@ -69,6 +69,9 @@ pub enum ProjectError {
     NotAccessible,
     Forbidden,
     InvalidTransition,
+    /// Archiving is blocked while an active process execution exists
+    /// anywhere in the project (ADR 0016).
+    StateConflict,
     DatabaseError,
 }
 
@@ -79,6 +82,7 @@ impl std::fmt::Display for ProjectError {
             ProjectError::NotAccessible => "workspace or project is not accessible",
             ProjectError::Forbidden => "permission denied",
             ProjectError::InvalidTransition => "status transition is not allowed",
+            ProjectError::StateConflict => "state conflict",
             ProjectError::DatabaseError => "database operation failed",
         };
         formatter.write_str(message)
@@ -331,6 +335,22 @@ pub async fn update_project(
     if !transition_allowed(&current.status, &status) {
         return Err(ProjectError::InvalidTransition);
     }
+    // ADR 0016: a project carrying ANY active execution cannot be archived.
+    // The project row lock (lock_scoped FOR UPDATE) is the same serialization
+    // START takes via work_items::lock_parent, so the check cannot race.
+    if status == PROJECT_STATUS_ARCHIVED
+        && current.status != PROJECT_STATUS_ARCHIVED
+        && crate::process_executions::active_execution_exists_for_project(
+            &mut transaction,
+            organization_id,
+            workspace_id,
+            project_id,
+        )
+        .await
+        .map_err(|_| ProjectError::DatabaseError)?
+    {
+        return Err(ProjectError::StateConflict);
+    }
     let row = sqlx::query_as::<_, ProjectRow>(
         "UPDATE projects SET name = $4, slug = $5, description = $6, status = $7, updated_at = now() \
          WHERE id = $1 AND workspace_id = $2 AND tenant_id = $3 AND deleted_at IS NULL \
@@ -538,6 +558,9 @@ pub async fn create_project_handler(
             serde_json::json!({ "status": ["Invalid transition"] }),
             request_id.0,
         )),
+        Err(ProjectError::StateConflict) => {
+            Err(ApiError::new(ErrorCode::StateConflict, request_id.0))
+        }
         Err(ProjectError::DatabaseError) => {
             Err(ApiError::new(ErrorCode::InternalError, request_id.0))
         }
@@ -718,6 +741,9 @@ pub async fn update_project_handler(
             serde_json::json!({ "status": ["Invalid transition"] }),
             request_id.0,
         )),
+        Err(ProjectError::StateConflict) => {
+            Err(ApiError::new(ErrorCode::StateConflict, request_id.0))
+        }
         Err(ProjectError::DatabaseError) => {
             Err(ApiError::new(ErrorCode::InternalError, request_id.0))
         }

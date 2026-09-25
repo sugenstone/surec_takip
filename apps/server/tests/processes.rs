@@ -1705,15 +1705,25 @@ async fn migration_backfill_preserves_assignments_and_member_has_no_grants(pool:
         .await
         .unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(before, after, "backfill never writes role assignments");
-    let member_grants: i64 = sqlx::query_scalar(
-        "SELECT count(*) FROM role_permissions rp JOIN roles r ON r.id = rp.role_id \
-         WHERE r.name = 'member' AND r.tenant_id = $1",
+    // ADR 0016: the 011 backfill grants built-in Members exactly the three
+    // execution keys at organization scope — and nothing else.
+    let member_keys: Vec<String> = sqlx::query_scalar(
+        "SELECT p.key FROM role_permissions rp JOIN roles r ON r.id = rp.role_id \
+         JOIN permissions p ON p.id = rp.permission_id \
+         WHERE r.name = 'member' AND r.tenant_id = $1 ORDER BY p.key",
     )
     .bind(org)
-    .fetch_one(&pool)
+    .fetch_all(&pool)
     .await
     .unwrap_or_else(|error| panic!("{error}"));
-    assert_eq!(member_grants, 0);
+    assert_eq!(
+        member_keys,
+        vec![
+            "process_executions:cancel",
+            "process_executions:complete",
+            "process_executions:start"
+        ]
+    );
     // A fresh organization's Owner bootstrap includes the same keys.
     let fresh = post_id(
         &f.app,
@@ -1739,9 +1749,11 @@ async fn migration_backfill_preserves_assignments_and_member_has_no_grants(pool:
 async fn rollback_is_blocked_by_dependents_and_reapplies(pool: PgPool) {
     let f = Fixture::new(&pool).await;
     f.create("Kept").await;
+    // The newest migration is 011 (process_executions); a dependent object on
+    // ITS table must block the down migration without CASCADE.
     exec(
         &pool,
-        "CREATE TABLE process_dependency_probe (process_id uuid REFERENCES processes (id))",
+        "CREATE TABLE process_dependency_probe (execution_id uuid REFERENCES process_executions (id))",
     )
     .await;
     assert!(
@@ -1755,8 +1767,9 @@ async fn rollback_is_blocked_by_dependents_and_reapplies(pool: PgPool) {
         .unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(kept, 1, "a blocked rollback keeps data");
     exec(&pool, "DROP TABLE process_dependency_probe").await;
-    // Without dependents the down migration (table first, then the
-    // work_items FK target) succeeds and the chain reapplies cleanly.
+    // Without dependents the down migration (executions table first, then
+    // the processes composite FK target) succeeds and the chain reapplies
+    // cleanly.
     platform_server::migrations::revert_last(&pool)
         .await
         .unwrap_or_else(|error| panic!("{error}"));

@@ -455,3 +455,41 @@ impl FromRequestParts<AppState> for ProcessContext {
         Ok(Self { parent, process })
     }
 }
+
+#[derive(Deserialize)]
+struct ExecutionRoute {
+    execution_id: String,
+}
+
+/// Process execution context (STEP 21A, ADR 0016): the FULL
+/// Org→Workspace→Project→Section→WorkItem→Process chain first, then the
+/// execution scoped to that exact process. An execution id alone never
+/// resolves anything; wrong-parent, foreign and unknown executions are one
+/// uniform 404. Eligibility only; mutations re-prove everything
+/// in-transaction.
+pub struct ProcessExecutionContext {
+    pub parent: ProcessContext,
+    pub execution: crate::process_executions::ExecutionPublic,
+}
+impl FromRequestParts<AppState> for ProcessExecutionContext {
+    type Rejection = ApiError;
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let parent = ProcessContext::from_request_parts(parts, state).await?;
+        let Path(route) = Path::<ExecutionRoute>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| not_found(parts))?;
+        let id = route
+            .execution_id
+            .parse::<Uuid>()
+            .map_err(|_| not_found(parts))?;
+        let scope = crate::process_executions::ExecutionScope::of(&parent);
+        let execution = crate::process_executions::find_accessible(&state.pool, scope, id)
+            .await
+            .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id_of(parts)))?
+            .ok_or_else(|| not_found(parts))?;
+        Ok(Self { parent, execution })
+    }
+}

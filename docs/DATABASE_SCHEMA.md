@@ -400,6 +400,51 @@ transient duplicate. Mutations lock project → section/memberships → work ite
 Progress will be derived from future execution records, never stored as a
 percentage.
 
+### process_executions (implemented — STEP 21A, ADR 0016)
+
+Runtime attempt history for process definitions; implemented by migration
+`20260926100000_process_executions`. `processes` stays configuration-only —
+every attempt is a separate immutable row here. There is no persisted
+`pending` state: pending simply means no `active` row exists for the
+process.
+
+```text
+id uuid PRIMARY KEY
+tenant_id uuid NOT NULL FK organizations
+workspace_id / project_id / section_id / work_item_id / process_id uuid NOT NULL
+attempt_no integer NOT NULL CHECK >= 1          -- 1, 2, 3, ... per process
+status text NOT NULL CHECK active|completed|cancelled
+started_at timestamptz NOT NULL DEFAULT now()   -- DB clock is authoritative
+completed_at / cancelled_at timestamptz NULL
+start_reason / cancel_reason text NULL          -- trimmed, length 1..500
+started_by_user_id uuid NOT NULL FK users
+completed_by_user_id / cancelled_by_user_id uuid NULL FK users
+created_at / updated_at timestamptz NOT NULL DEFAULT now()
+UNIQUE(process_id, attempt_no)
+FOREIGN KEY(tenant_id, workspace_id, project_id, section_id, work_item_id, process_id)
+  REFERENCES processes(tenant_id, workspace_id, project_id, section_id, work_item_id, id)
+UNIQUE INDEX(process_id) WHERE status = 'active'   -- one live attempt per process
+INDEX(tenant_id, workspace_id, project_id, started_at, id) WHERE status = 'active'
+INDEX(process_id, attempt_no)
+INDEX(tenant_id, workspace_id, project_id, section_id, work_item_id, process_id, attempt_no)
+```
+
+The composite process FK (migration 011 also adds
+`processes_scope_id_key UNIQUE(tenant_id, ..., work_item_id, id)`) makes an
+execution structurally incapable of pointing at a process outside its own
+declared hierarchy — no CASCADE anywhere. A state CHECK enforces the
+terminal matrix: `active` rows have no terminal columns, `completed` rows
+carry `completed_at >= started_at` + `completed_by`, `cancelled` rows carry
+`cancelled_at >= started_at` + `cancelled_by`, and the other terminal
+columns stay NULL. `updated_at` exists only to timestamp the single
+terminal write — terminal attempts never change again; retry inserts a new
+attempt (`MAX(attempt_no)+1`) under the project-level serialization lock.
+
+Archive guards: archiving a process with an active execution, a work item
+with any active descendant execution, a section whose subtree contains any
+active execution, or a project containing any active execution all fail
+with a state conflict — active work can never be silently hidden.
+
 ### cards
 
 ``` text
@@ -1188,7 +1233,7 @@ as mandated by AGENTS.md. Their UI/dispatch features remain in their planned pha
 009 work_items (implemented; conceptual cards/card_relations superseded for STEP 19)
 010 processes (implemented as work-item-owned definitions, STEP 20)
 010 dynamic properties
-011 process_steps + execution records (definitions implemented at 010)
+011 process_executions (implemented as immutable attempt records, STEP 21A)
 012 dependencies
 013 assignments
 014 time_sessions + stop_reasons

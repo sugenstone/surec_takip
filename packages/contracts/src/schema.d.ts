@@ -347,6 +347,22 @@ export interface paths {
         patch: operations["update_work_item_handler"];
         trace?: never;
     };
+    "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/executions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_work_item_executions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes": {
         parameters: {
             query?: never;
@@ -395,6 +411,54 @@ export interface paths {
         patch: operations["update_process_handler"];
         trace?: never;
     };
+    "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/executions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["start_execution_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/executions/{execution_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["cancel_execution_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/executions/{execution_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["complete_execution_handler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ready": {
         parameters: {
             query?: never;
@@ -428,6 +492,10 @@ export interface components {
         AckData: Record<string, never>;
         AckResponse: {
             data: components["schemas"]["AckData"];
+        };
+        CancelExecutionRequest: {
+            /** @description Optional bounded note explaining why the attempt was abandoned. */
+            cancel_reason?: string | null;
         };
         CreateInvitationData: {
             invitation: components["schemas"]["InvitationPublic"];
@@ -509,9 +577,48 @@ export interface components {
             request_id: string;
         };
         /** @enum {string} */
-        ErrorCode: "RESOURCE_NOT_FOUND" | "METHOD_NOT_ALLOWED" | "SERVICE_NOT_READY" | "AUTH_REQUIRED" | "AUTH_INVALID_CREDENTIALS" | "PERMISSION_DENIED" | "INVITATION_INVALID" | "VALIDATION_ERROR" | "INTERNAL_ERROR";
+        ErrorCode: "RESOURCE_NOT_FOUND" | "METHOD_NOT_ALLOWED" | "SERVICE_NOT_READY" | "AUTH_REQUIRED" | "AUTH_INVALID_CREDENTIALS" | "PERMISSION_DENIED" | "INVITATION_INVALID" | "VALIDATION_ERROR" | "STATE_CONFLICT" | "INTERNAL_ERROR";
         ErrorEnvelope: {
             error: components["schemas"]["ErrorBody"];
+        };
+        ExecutionListResponse: {
+            data: components["schemas"]["ExecutionPublic"][];
+            server_time: string;
+        };
+        ExecutionMutationResponse: {
+            data: components["schemas"]["ExecutionPublic"];
+            /** @description Authoritative server timestamp for client clock-offset correction. */
+            server_time: string;
+        };
+        ExecutionPublic: {
+            /** Format: int32 */
+            attempt_no: number;
+            cancel_reason?: string | null;
+            cancelled_at?: string | null;
+            /** Format: uuid */
+            cancelled_by_user_id?: string | null;
+            completed_at?: string | null;
+            /** Format: uuid */
+            completed_by_user_id?: string | null;
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_id: string;
+            /** Format: uuid */
+            process_id: string;
+            /** Format: uuid */
+            project_id: string;
+            /** Format: uuid */
+            section_id: string;
+            start_reason?: string | null;
+            started_at: string;
+            /** Format: uuid */
+            started_by_user_id: string;
+            status: string;
+            /** Format: uuid */
+            work_item_id: string;
+            /** Format: uuid */
+            workspace_id: string;
         };
         HealthData: {
             status: components["schemas"]["HealthStatus"];
@@ -677,6 +784,10 @@ export interface components {
             status: string;
             /** Format: uuid */
             workspace_id: string;
+        };
+        StartExecutionRequest: {
+            /** @description Optional bounded note for operational history (covers retry reasons). */
+            start_reason?: string | null;
         };
         UpdateProcessRequest: {
             /** @description Empty string clears the stored description. */
@@ -2114,6 +2225,47 @@ export interface operations {
             };
         };
     };
+    list_work_item_executions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                workspace_id: string;
+                project_id: string;
+                section_id: string;
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionListResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
     list_processes: {
         parameters: {
             query?: never;
@@ -2396,6 +2548,222 @@ export interface operations {
                 };
             };
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    start_execution_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                workspace_id: string;
+                project_id: string;
+                section_id: string;
+                work_item_id: string;
+                process_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StartExecutionRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionMutationResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    cancel_execution_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                workspace_id: string;
+                project_id: string;
+                section_id: string;
+                work_item_id: string;
+                process_id: string;
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CancelExecutionRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionMutationResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    complete_execution_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                workspace_id: string;
+                project_id: string;
+                section_id: string;
+                work_item_id: string;
+                process_id: string;
+                execution_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExecutionMutationResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

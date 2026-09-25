@@ -1311,6 +1311,23 @@ async fn migration_backfill_preserves_assignments_and_member_has_no_grants(pool:
         .await
         .unwrap_or_else(|error| panic!("operation must succeed: {error}"));
     assert_eq!(before, after);
-    let member_grants:i64=sqlx::query_scalar("SELECT count(*) FROM role_permissions rp JOIN roles r ON r.id=rp.role_id WHERE r.name='member' AND r.tenant_id=$1").bind(org).fetch_one(&pool).await.unwrap_or_else(|error| panic!("operation must succeed: {error}"));
-    assert_eq!(member_grants, 0);
+    // ADR 0016: the 011 backfill grants built-in Members exactly the three
+    // execution keys at organization scope — and nothing else.
+    let member_keys: Vec<String> = sqlx::query_scalar(
+        "SELECT p.key FROM role_permissions rp JOIN roles r ON r.id = rp.role_id \
+         JOIN permissions p ON p.id = rp.permission_id \
+         WHERE r.name = 'member' AND r.tenant_id = $1 ORDER BY p.key",
+    )
+    .bind(org)
+    .fetch_all(&pool)
+    .await
+    .unwrap_or_else(|error| panic!("operation must succeed: {error}"));
+    assert_eq!(
+        member_keys,
+        vec![
+            "process_executions:cancel",
+            "process_executions:complete",
+            "process_executions:start"
+        ]
+    );
 }
