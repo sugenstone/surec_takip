@@ -438,11 +438,21 @@ Base: `/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/project
 | PATCH | `/reorder` | `process_ids: uuid[]` (every active process exactly once) | 200 `{data: ProcessPublic[]}` |
 | GET | `/{process_id}` | none | 200 bare ProcessPublic |
 | PATCH | `/{process_id}` | optional name, slug, description (empty clears), is_required, status | 200 `{data: ProcessPublic}` |
+| PUT | `/{process_id}/assignment` | `{"user_id": uuid \| null}` | 200 `{data: ProcessPublic}` |
 
 Public fields: id, organization_id, workspace_id, project_id, section_id,
-work_item_id, name, slug, description, position, is_required, status.
-These are process DEFINITIONS: no execution state (start/finish, timers,
-assignees, progress) exists in this API.
+work_item_id, name, slug, description, position, is_required, status,
+`assignee` (`{id, display_name, eligible}` or `null`).
+
+Assignment (STEP 21C, ADR 0018): `assignee` is the current responsible user —
+responsibility metadata, NOT authorization. `PUT .../assignment` requires
+`processes:assign` (Owner-only system grant; Member never receives it).
+`user_id: null` unassigns; a uuid must satisfy eligibility at write time
+(active user + active organization + workspace membership), otherwise a
+generic `422 VALIDATION_ERROR` on field `user_id` — foreign or unknown ids
+are indistinguishable. A stale assignee (membership later revoked) remains
+readable with `eligible: false`; the row is never auto-cleared. There is no
+self-claim path in V1.
 
 Reads require both memberships and the exact parent route chain through an
 active section, non-archived project and visible work item; there is no
@@ -466,6 +476,15 @@ transaction (project → section/memberships → work item → grants → proces
 rows). No revision or pagination protocol; see
 [ADR 0015](decisions/0015-process-domain-foundation.md).
 
+## 10.2a Workspace member directory (implemented — STEP 21C)
+
+`GET /api/v1/organizations/{organization_id}/workspaces/{workspace_id}/members`
+→ `200 {data: WorkspaceMemberPublic[]}` where `WorkspaceMemberPublic` is
+`{id, display_name}` — eligible assignable users only (active user + active
+org + workspace membership), ordered by display name. Access requires
+ordinary workspace access (both memberships); `processes:assign` is NOT
+required for reads. No email, roles, or membership internals are exposed.
+
 # 10.3 Process executions (implemented — STEP 21A)
 
 Runtime attempt records — separate from the definitions above (ADR 0016).
@@ -481,8 +500,13 @@ Base for transitions:
 
 Public fields: id, tenant/scoped ids, `attempt_no`, `status`
 (`active|completed|cancelled`), `started_at`, `completed_at`,
-`cancelled_at`, `start_reason`, `cancel_reason`, and the actor ids
-`started_by_user_id`/`completed_by_user_id`/`cancelled_by_user_id`.
+`cancelled_at`, `start_reason`, `cancel_reason`, the actor ids
+`started_by_user_id`/`completed_by_user_id`/`cancelled_by_user_id`, and
+`assignee_user_id` — the immutable responsibility snapshot written at START
+(ADR 0018): who the process was assigned to when this attempt began. It is
+never client-writable and never rewritten by later reassignment; it is
+distinct from actor ids (a supervisor may start work assigned to someone
+else).
 `server_time` is the DB clock at response time so clients can anchor the
 display-only timer without trusting their own clock.
 

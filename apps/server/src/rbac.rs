@@ -71,6 +71,7 @@ pub async fn bootstrap_builtin_roles(
         crate::process_executions::PROCESS_EXECUTIONS_START.0,
         crate::process_executions::PROCESS_EXECUTIONS_COMPLETE.0,
         crate::process_executions::PROCESS_EXECUTIONS_CANCEL.0,
+        crate::processes::PROCESSES_ASSIGN.0,
     ] {
         sqlx::query(
             "INSERT INTO role_permissions (role_id, permission_id, scope) \

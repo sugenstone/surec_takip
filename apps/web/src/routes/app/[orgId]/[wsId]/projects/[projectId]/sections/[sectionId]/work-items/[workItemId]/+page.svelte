@@ -12,17 +12,21 @@
   import {
     cancelExecution,
     completeExecution,
+    listWorkspaceMembers,
     reorderProcesses,
     startExecution,
     updateProcess,
+    updateProcessAssignment,
     type ExecutionPublic,
     type ProcessPublic,
+    type WorkspaceMemberPublic,
   } from '$lib/api/client';
   import { executionErrorMessageKey, processErrorMessageKey } from '$lib/api/errors';
   import WorkItemForm from '$lib/work-items/WorkItemForm.svelte';
   import ProgressBlock from '$lib/ui/ProgressBlock.svelte';
   import ProcessForm from '$lib/processes/ProcessForm.svelte';
   import ProcessRow from '$lib/processes/ProcessRow.svelte';
+  import AssigneeDialog from '$lib/processes/AssigneeDialog.svelte';
   import type { PageProps } from './$types';
   let { data }: PageProps = $props();
   let locale = $derived(data.locale);
@@ -36,6 +40,7 @@
   let canUpdate = $derived(data.permissions.includes('processes:update'));
   let canArchive = $derived(data.permissions.includes('processes:archive'));
   let canReorder = $derived(data.permissions.includes('processes:reorder'));
+  let canAssign = $derived(data.permissions.includes('processes:assign'));
   // Execution permissions are backend-enforced; these only gate visibility.
   let canExecStart = $derived(data.permissions.includes('process_executions:start'));
   let canExecComplete = $derived(data.permissions.includes('process_executions:complete'));
@@ -59,6 +64,11 @@
   let creatingFor = $state<string | null>(null);
   let editing = $state<ProcessPublic | null>(null);
   let archiving = $state<ProcessPublic | null>(null);
+  let assigning = $state<ProcessPublic | null>(null);
+  // Member directory: fetched lazily once per page when the picker first
+  // opens — never one request per process row (ADR 0018).
+  let members = $state<WorkspaceMemberPublic[] | null>(null);
+  let membersFailed = $state(false);
   let pending = $state(false);
   let errorFor = $state<{ id: string; message: string } | null>(null);
   let announcement = $state('');
@@ -68,6 +78,7 @@
     if (creatingFor !== null && creatingFor !== id) creatingFor = null;
     if (editing && editing.work_item_id !== id) editing = null;
     if (archiving && archiving.work_item_id !== id) archiving = null;
+    if (assigning && assigning.work_item_id !== id) assigning = null;
   });
 
   async function run(
@@ -156,6 +167,32 @@
     if (!target) return;
     if (await run(() => updateProcess(data.processScope, target.id, { status: 'archived' })))
       archiving = null;
+  }
+
+  // Assignment (STEP 21C): deliberate dialog, member directory fetched once.
+  function askAssign(process: ProcessPublic) {
+    errorFor = null;
+    assigning = process;
+    if (members === null && !membersFailed) void loadMembers();
+  }
+  async function loadMembers() {
+    try {
+      members = await listWorkspaceMembers(data.organization.id, data.workspace.id);
+      membersFailed = false;
+    } catch {
+      membersFailed = true;
+    }
+  }
+  async function confirmAssign(userId: string | null) {
+    const target = assigning;
+    if (!target) return;
+    const ok = await run(() =>
+      updateProcessAssignment({ ...data.processScope, processId: target.id }, { user_id: userId }),
+    );
+    if (ok) {
+      announcement = translate(locale, 'processes.assignee.saved', { name: target.name });
+      assigning = null;
+    }
   }
 
   function processNameOf(execution: ExecutionPublic | null): string {
@@ -249,6 +286,7 @@
               {canUpdate}
               {canArchive}
               {canReorder}
+              {canAssign}
               canStart={canExecStart}
               canComplete={canExecComplete}
               canCancel={canExecCancel}
@@ -261,6 +299,7 @@
                 errorFor = null;
                 archiving = process;
               }}
+              onAssign={() => askAssign(process)}
               onStart={() => startAttempt(process)}
               onComplete={(id) => {
                 const target = attemptsByProcess[process.id]?.find((attempt) => attempt.id === id);
@@ -355,6 +394,21 @@
     errorFor = null;
   }}
   onConfirm={confirmArchive}
+/>
+
+<AssigneeDialog
+  open={assigning !== null}
+  process={assigning}
+  {members}
+  {membersFailed}
+  {pending}
+  error={assigning ? (error ?? '') : ''}
+  {locale}
+  onCancel={() => {
+    assigning = null;
+    errorFor = null;
+  }}
+  onConfirm={(userId) => void confirmAssign(userId)}
 />
 
 <ConfirmDialog

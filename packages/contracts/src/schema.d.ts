@@ -251,6 +251,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Member directory (STEP 21C): only users that would currently satisfy
+         *     assignment eligibility — active user, active organization membership,
+         *     active workspace membership. Access gate is the ordinary workspace
+         *     context: any legitimate workspace member may see member names (operational
+         *     metadata); the write path alone requires processes:assign.
+         */
+        get: operations["list_workspace_members"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects": {
         parameters: {
             query?: never;
@@ -411,6 +434,22 @@ export interface paths {
         patch: operations["update_process_handler"];
         trace?: never;
     };
+    "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/assignment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["assign_process_handler"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/executions": {
         parameters: {
             query?: never;
@@ -492,6 +531,18 @@ export interface components {
         AckData: Record<string, never>;
         AckResponse: {
             data: components["schemas"]["AckData"];
+        };
+        /**
+         * @description Minimal public identity of a process assignee (STEP 21C, ADR 0018).
+         *     `eligible` reports whether the assignee still satisfies membership/user
+         *     activation rules — a stale assignee remains displayed for history but
+         *     must not be presented as an active member.
+         */
+        AssigneePublic: {
+            display_name: string;
+            eligible: boolean;
+            /** Format: uuid */
+            id: string;
         };
         CancelExecutionRequest: {
             /** @description Optional bounded note explaining why the attempt was abandoned. */
@@ -591,6 +642,13 @@ export interface components {
             server_time: string;
         };
         ExecutionPublic: {
+            /**
+             * Format: uuid
+             * @description Responsibility snapshot (STEP 21C, ADR 0018): who the process was
+             *     assigned to when this attempt began. Written once at INSERT, never
+             *     updated; distinct from the actor fields above.
+             */
+            assignee_user_id?: string | null;
             /** Format: int32 */
             attempt_no: number;
             cancel_reason?: string | null;
@@ -705,6 +763,7 @@ export interface components {
             data: components["schemas"]["ProcessPublic"];
         };
         ProcessPublic: {
+            assignee?: null | components["schemas"]["AssigneePublic"];
             description?: string | null;
             /** Format: uuid */
             id: string;
@@ -823,6 +882,15 @@ export interface components {
             /** @description Optional bounded note for operational history (covers retry reasons). */
             start_reason?: string | null;
         };
+        UpdateAssignmentRequest: {
+            /**
+             * Format: uuid
+             * @description A workspace-member user id to assign, or `null` to unassign. The key
+             *     itself is required — an omitted `user_id` is a malformed request
+             *     (400), never a silent unassign.
+             */
+            user_id: string | null;
+        };
         UpdateProcessRequest: {
             /** @description Empty string clears the stored description. */
             description?: string | null;
@@ -904,6 +972,18 @@ export interface components {
         };
         WorkspaceListResponse: {
             data: components["schemas"]["WorkspacePublic"][];
+        };
+        WorkspaceMemberListResponse: {
+            data: components["schemas"]["WorkspaceMemberPublic"][];
+        };
+        /**
+         * @description Minimal member identity for the assignee picker (STEP 21C, ADR 0018):
+         *     id + display name only — no email, roles, or membership internals.
+         */
+        WorkspaceMemberPublic: {
+            display_name: string;
+            /** Format: uuid */
+            id: string;
         };
         WorkspaceMembershipPublic: {
             /** Format: uuid */
@@ -1610,6 +1690,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EffectivePermissionsResponse"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    list_workspace_members: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Parent organization id */
+                organization_id: string;
+                /** @description Workspace id */
+                workspace_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkspaceMemberListResponse"];
                 };
             };
             401: {
@@ -2543,6 +2663,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["UpdateProcessRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProcessMutationResponse"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    assign_process_handler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_id: string;
+                workspace_id: string;
+                project_id: string;
+                section_id: string;
+                work_item_id: string;
+                process_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAssignmentRequest"];
             };
         };
         responses: {

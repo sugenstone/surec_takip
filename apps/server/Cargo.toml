@@ -84,3 +84,7 @@ required-features = ["integration"]
 [[test]]
 name = "progress"
 required-features = ["integration"]
+
+[[test]]
+name = "assignments"
+required-features = ["integration"]

@@ -55,7 +55,8 @@ try {
   // Distinct users keep spec fixtures isolated from each other: auth/shell
   // (e2e), projects owner (e2e2), invited permission-less member (e2e3) and
   // sections owner (e2e4), work items owner (e2e5), UX fixtures (e2e6),
-  // processes owner (e2e7), executions owner (e2e8) and progress (e2e9).
+  // processes owner (e2e7), executions owner (e2e8), progress (e2e9) and
+  // assignments owner (e2e10); e2e3 doubles as the invited assignee/member.
   for (const [email, displayName] of [
     ['e2e@example.test', 'E2e User'],
     ['e2e2@example.test', 'E2e User Two'],
@@ -66,6 +67,7 @@ try {
     ['e2e7@example.test', 'E2e Processes'],
     ['e2e8@example.test', 'E2e Executions'],
     ['e2e9@example.test', 'E2e Progress'],
+    ['e2e10@example.test', 'E2e Assignments'],
   ]) {
     await compose(
       'run',

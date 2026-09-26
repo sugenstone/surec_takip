@@ -291,6 +291,19 @@ pub struct WorkspaceListResponse {
     pub data: Vec<WorkspacePublic>,
 }
 
+/// Minimal member identity for the assignee picker (STEP 21C, ADR 0018):
+/// id + display name only — no email, roles, or membership internals.
+#[derive(Serialize, ToSchema, sqlx::FromRow)]
+pub struct WorkspaceMemberPublic {
+    pub id: Uuid,
+    pub display_name: String,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct WorkspaceMemberListResponse {
+    pub data: Vec<WorkspaceMemberPublic>,
+}
+
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
@@ -435,4 +448,45 @@ pub async fn get_workspace(
     // The full step 9 access invariant (both memberships, parent-child
     // authority, visibility) is resolved by the WorkspaceContext extractor.
     Ok(Json(WorkspacePublic::from(context.workspace)))
+}
+
+/// Member directory (STEP 21C): only users that would currently satisfy
+/// assignment eligibility — active user, active organization membership,
+/// active workspace membership. Access gate is the ordinary workspace
+/// context: any legitimate workspace member may see member names (operational
+/// metadata); the write path alone requires processes:assign.
+#[utoipa::path(get,
+    path = "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/members",
+    params(
+        ("organization_id" = Uuid, Path, description = "Parent organization id"),
+        ("workspace_id" = Uuid, Path, description = "Workspace id"),
+    ),
+    responses(
+        (status = 200, body = WorkspaceMemberListResponse),
+        (status = 401, body = crate::error::ErrorEnvelope),
+        (status = 404, body = crate::error::ErrorEnvelope),
+    )
+)]
+pub async fn list_workspace_members(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    context: crate::context::WorkspaceContext,
+) -> Result<Json<WorkspaceMemberListResponse>, ApiError> {
+    let members = sqlx::query_as::<_, WorkspaceMemberPublic>(
+        "SELECT u.id, u.display_name \
+         FROM workspace_memberships wm \
+         JOIN organization_memberships om ON om.tenant_id = wm.tenant_id \
+             AND om.user_id = wm.user_id \
+             AND om.status = 'active' AND om.deleted_at IS NULL \
+         JOIN users u ON u.id = wm.user_id AND u.status = 'active' \
+         WHERE wm.tenant_id = $1 AND wm.workspace_id = $2 \
+           AND wm.status = 'active' AND wm.deleted_at IS NULL \
+         ORDER BY u.display_name, u.id",
+    )
+    .bind(context.organization_id)
+    .bind(context.workspace_id)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id.0))?;
+    Ok(Json(WorkspaceMemberListResponse { data: members }))
 }

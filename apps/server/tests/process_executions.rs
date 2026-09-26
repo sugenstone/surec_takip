@@ -1533,8 +1533,9 @@ async fn unique_active_and_attempt_number_are_structural(pool: PgPool) {
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn migration_011_rolls_back_and_reapplies(pool: PgPool) {
-    // Dependent data blocks the down migration (no CASCADE). 012's index-only
-    // down runs first, then the probe must block 011's table drop.
+    // Dependent data blocks the down migration (no CASCADE). 013's assignment
+    // columns and 012's index-only down run first, then the probe must block
+    // 011's table drop.
     let f = Fixture::new(&pool).await;
     f.started().await;
     exec(
@@ -1543,6 +1544,10 @@ async fn migration_011_rolls_back_and_reapplies(pool: PgPool) {
     )
     .await;
     platform_server::migrations::revert_last(&pool)
+        .await
+        .unwrap_or_else(|error| panic!("013 assignment down must apply: {error}"));
+    MIGRATOR
+        .undo(&pool, 20260926100000)
         .await
         .unwrap_or_else(|error| panic!("012 index down must apply: {error}"));
     let index_exists: bool = sqlx::query_scalar(

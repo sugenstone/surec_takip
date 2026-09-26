@@ -8,8 +8,9 @@ Projects (STEP 17), recursive Sections (STEP 18), Work Items (STEP 19) ve
 STEP 19.5 frontend ürün deneyimi mevcut. STEP 20 Process tanımları ve
 STEP 21A Process execution core (başlat/tamamla/iptal, immutable deneme
 geçmişi) yerel review aşamasında. STEP 21B derived Progress Engine
-project/section/work-item yanıtlarına gömülüdür. Atama, pause/resume ve
-realtime henüz uygulanmadı.
+project/section/work-item yanıtlarına gömülüdür. STEP 21C assignment
+(süreç sorumlusu + yürütme snapshot'ı) yerel review aşamasında.
+Pause/resume ve realtime henüz uygulanmadı.
 
 ## Bağlayıcı belgeler
 
@@ -268,6 +269,22 @@ yok — aktif retry yüzdeyi geriletir. Section/Project aggregate'leri tüm
 alt ağaç üzerinden leaf-weighted'tır (child yüzde ortalaması değil);
 yapısal değişmezlik garantidir. `npm run test:db` `progress` target'ını
 içerir; E2E runner izole bir Progress kullanıcısı ekler.
+
+Atama (STEP 21C, ADR 0018) süreçten kim **sorumlu** sorusunu yanıtlar ve
+yürütme yetkisinden ayrıdır: `processes.assignee_user_id` mevcut sorumluyu
+tutar (nullable, `PUT .../processes/{id}/assignment` ile `{"user_id": uuid
+| null}` değişir); `process_executions.assignee_user_id` ise deneme
+başlarken çekilen **değişmez snapshot**'tır — yeniden atama geçmiş denemeyi
+yeniden yazmaz ve `started_by`/`completed_by`/`cancelled_by` aktörleri
+bağımsız kalır (süpervizör başkasının işini başlatabilir). `processes:assign`
+yalnızca Owner'a grant'lidir; Member atamayı görür ama kontrolü göremez.
+Assignee uygunluğu composite FK `(workspace_id, user_id) →
+workspace_memberships` ile şemada, transaction içinde aktif user + aktif
+org + workspace üyeliği yeniden kanıtlanarak korunur; üyelik iptali saklı
+atamayı temizlemez (stale, `eligible: false`). Üye seçici
+`GET .../workspaces/{id}/members` dizininden beslenir (sadece `id +
+display_name`, salt-okunur). `npm run test:db` `assignments` target'ını
+içerir.
 
 ## Dil ve tema foundation
 

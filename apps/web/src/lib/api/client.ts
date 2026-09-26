@@ -290,6 +290,37 @@ export async function updateProcess(
   });
   return body.data;
 }
+// Assignment (STEP 21C / ADR 0018): dedicated command — responsibility is a
+// separate permission boundary from processes:update. `user_id: null`
+// unassigns; execution snapshots are server-written at start time.
+export async function updateProcessAssignment(
+  scope: ExecutionScope,
+  input: components['schemas']['UpdateAssignmentRequest'],
+): Promise<ProcessPublic> {
+  const body = await request<{ data: ProcessPublic }>(
+    `${processesPath(scope)}/${scope.processId}/assignment`,
+    {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(input),
+    },
+  );
+  return body.data;
+}
+
+// Eligible workspace members for the assignee picker (id + display name
+// only). Read requires ordinary workspace access, not processes:assign.
+export type WorkspaceMemberPublic = components['schemas']['WorkspaceMemberPublic'];
+export async function listWorkspaceMembers(
+  organizationId: string,
+  workspaceId: string,
+): Promise<WorkspaceMemberPublic[]> {
+  const body = await request<{ data: WorkspaceMemberPublic[] }>(
+    `/api/v1/organizations/${organizationId}/workspaces/${workspaceId}/members`,
+  );
+  return body.data;
+}
+
 // The server validates that the ids are exactly the active processes.
 export async function reorderProcesses(
   scope: ProcessScope,

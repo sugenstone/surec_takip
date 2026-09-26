@@ -945,6 +945,69 @@
         }
       }
     },
+    "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/members": {
+      "get": {
+        "tags": [
+          "workspaces"
+        ],
+        "summary": "Member directory (STEP 21C): only users that would currently satisfy\nassignment eligibility — active user, active organization membership,\nactive workspace membership. Access gate is the ordinary workspace\ncontext: any legitimate workspace member may see member names (operational\nmetadata); the write path alone requires processes:assign.",
+        "operationId": "list_workspace_members",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "description": "Parent organization id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "description": "Workspace id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceMemberListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects": {
       "get": {
         "tags": [
@@ -2695,6 +2758,142 @@
         }
       }
     },
+    "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/assignment": {
+      "put": {
+        "tags": [
+          "processes"
+        ],
+        "operationId": "assign_process_handler",
+        "parameters": [
+          {
+            "name": "organization_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "workspace_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "section_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "work_item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "process_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAssignmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProcessMutationResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/executions": {
       "post": {
         "tags": [
@@ -3200,6 +3399,27 @@
           }
         }
       },
+      "AssigneePublic": {
+        "type": "object",
+        "description": "Minimal public identity of a process assignee (STEP 21C, ADR 0018).\n`eligible` reports whether the assignee still satisfies membership/user\nactivation rules — a stale assignee remains displayed for history but\nmust not be presented as an active member.",
+        "required": [
+          "id",
+          "display_name",
+          "eligible"
+        ],
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "eligible": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      },
       "CancelExecutionRequest": {
         "type": "object",
         "properties": {
@@ -3564,6 +3784,14 @@
           "started_by_user_id"
         ],
         "properties": {
+          "assignee_user_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Responsibility snapshot (STEP 21C, ADR 0018): who the process was\nassigned to when this attempt began. Written once at INSERT, never\nupdated; distinct from the actor fields above."
+          },
           "attempt_no": {
             "type": "integer",
             "format": "int32"
@@ -3984,6 +4212,17 @@
           "status"
         ],
         "properties": {
+          "assignee": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AssigneePublic",
+                "description": "Current responsible user; `null` means unassigned. Assignment is\nresponsibility metadata, never authorization (ADR 0018)."
+              }
+            ]
+          },
           "description": {
             "type": [
               "string",
@@ -4288,6 +4527,23 @@
         },
         "additionalProperties": false
       },
+      "UpdateAssignmentRequest": {
+        "type": "object",
+        "required": [
+          "user_id"
+        ],
+        "properties": {
+          "user_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "A workspace-member user id to assign, or `null` to unassign. The key\nitself is required — an omitted `user_id` is a malformed request\n(400), never a silent unassign."
+          }
+        },
+        "additionalProperties": false
+      },
       "UpdateProcessRequest": {
         "type": "object",
         "properties": {
@@ -4549,6 +4805,37 @@
             "items": {
               "$ref": "#/components/schemas/WorkspacePublic"
             }
+          }
+        }
+      },
+      "WorkspaceMemberListResponse": {
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WorkspaceMemberPublic"
+            }
+          }
+        }
+      },
+      "WorkspaceMemberPublic": {
+        "type": "object",
+        "description": "Minimal member identity for the assignee picker (STEP 21C, ADR 0018):\nid + display name only — no email, roles, or membership internals.",
+        "required": [
+          "id",
+          "display_name"
+        ],
+        "properties": {
+          "display_name": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
           }
         }
       },

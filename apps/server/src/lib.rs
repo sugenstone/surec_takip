@@ -25,7 +25,7 @@ use axum::{
     http::{HeaderValue, header},
     middleware::{self, Next},
     response::Response,
-    routing::{delete, get, patch, post},
+    routing::{delete, get, patch, post, put},
 };
 use error::{ApiError, ErrorCode};
 use serde::Serialize;
@@ -126,6 +126,12 @@ pub fn router(state: AppState) -> Router {
             "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}",
             get(workspaces::get_workspace),
         )
+        // STEP 21C (ADR 0018): eligible-member directory for the assignee
+        // picker. Read-only; assignment writes are process-scoped.
+        .route(
+            "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/members",
+            get(workspaces::list_workspace_members),
+        )
         .route(
             "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects",
             post(projects::create_project_handler).get(projects::list_projects),
@@ -152,6 +158,9 @@ pub fn router(state: AppState) -> Router {
         // Static segment: matched ahead of the {process_id} parameter route.
         .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/reorder", patch(processes::reorder_processes_handler))
         .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}", get(processes::get_process).patch(processes::update_process_handler))
+        // STEP 21C (ADR 0018): dedicated assignment command — separate from
+        // processes:update so responsibility is its own permission boundary.
+        .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/assignment", put(processes::assign_process_handler))
         // STEP 21A (ADR 0016): execution attempts — start under the process,
         // terminal transitions under the execution, history under the work item.
         .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/executions", get(process_executions::list_work_item_executions))
@@ -241,6 +250,7 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         workspaces::create_workspace,
         workspaces::list_workspaces,
         workspaces::get_workspace,
+        workspaces::list_workspace_members,
         projects::create_project_handler,
         projects::list_projects,
         projects::get_project,
@@ -257,6 +267,7 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         processes::reorder_processes_handler,
         processes::get_process,
         processes::update_process_handler,
+        processes::assign_process_handler,
         process_executions::start_execution_handler,
         process_executions::list_work_item_executions,
         process_executions::complete_execution_handler,
@@ -287,6 +298,8 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         workspaces::WorkspacePublic,
         workspaces::WorkspaceMembershipPublic,
         workspaces::WorkspaceListResponse,
+        workspaces::WorkspaceMemberPublic,
+        workspaces::WorkspaceMemberListResponse,
         projects::CreateProjectRequest,
         projects::UpdateProjectRequest,
         projects::ProjectPublic,
@@ -304,6 +317,8 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         work_items::WorkItemListResponse,
         processes::CreateProcessRequest,
         processes::UpdateProcessRequest,
+        processes::UpdateAssignmentRequest,
+        processes::AssigneePublic,
         processes::ReorderProcessesRequest,
         processes::ProcessPublic,
         processes::ProcessMutationResponse,

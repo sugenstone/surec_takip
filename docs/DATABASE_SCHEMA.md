@@ -383,13 +383,18 @@ description text NULL (length <= 2000)
 position integer NOT NULL CHECK >= 0
 is_required boolean NOT NULL DEFAULT true   -- definition fact only
 status text NOT NULL DEFAULT active CHECK active|archived   -- configuration lifecycle
+assignee_user_id uuid NULL                  -- current responsible user (013)
 created_at / updated_at timestamptz NOT NULL DEFAULT now()
 deleted_at timestamptz NULL
 UNIQUE(work_item_id, slug) -- includes archived/deleted rows
 FOREIGN KEY(tenant_id, workspace_id, project_id, section_id, work_item_id)
   REFERENCES work_items(tenant_id, workspace_id, project_id, section_id, id)
+FOREIGN KEY(workspace_id, assignee_user_id)
+  REFERENCES workspace_memberships(workspace_id, user_id)   -- cross-scope assignee unstorable
 UNIQUE INDEX(work_item_id, position) WHERE deleted_at IS NULL AND status = 'active'
 INDEX(work_item_id, position, id)
+INDEX(workspace_id, assignee_user_id)
+  WHERE deleted_at IS NULL AND status = 'active' AND assignee_user_id IS NOT NULL
 ```
 
 Reads exclude archived and deleted processes. Create appends after every
@@ -399,6 +404,15 @@ transient duplicate. Mutations lock project → section/memberships → work ite
 → grants → process rows. Archive is terminal retention; slug stays occupied.
 Progress is derived from `process_executions` history at read time
 (STEP 21B, ADR 0017), never stored as a percentage.
+
+`assignee_user_id` (STEP 21C, ADR 0018) is the current responsible user —
+responsibility metadata, not authorization. The composite FK targets the
+membership ROW (existence, not current eligibility), so a revoked membership
+leaves the stored assignee intact and attributable ("stale"); eligibility
+(active user + active org membership + active workspace membership) is
+re-proven inside the assignment transaction under FOR SHARE locks. There is
+no separate "default assignee" on concrete rows — future templates may copy
+a default at instantiation.
 
 ### process_executions (implemented — STEP 21A, ADR 0016)
 
@@ -419,6 +433,7 @@ completed_at / cancelled_at timestamptz NULL
 start_reason / cancel_reason text NULL          -- trimmed, length 1..500
 started_by_user_id uuid NOT NULL FK users
 completed_by_user_id / cancelled_by_user_id uuid NULL FK users
+assignee_user_id uuid NULL FK users            -- responsibility snapshot (013)
 created_at / updated_at timestamptz NOT NULL DEFAULT now()
 UNIQUE(process_id, attempt_no)
 FOREIGN KEY(tenant_id, workspace_id, project_id, section_id, work_item_id, process_id)
@@ -428,6 +443,8 @@ INDEX(tenant_id, workspace_id, project_id, started_at, id) WHERE status = 'activ
 INDEX(process_id, attempt_no)
 INDEX(tenant_id, workspace_id, project_id, section_id, work_item_id, process_id, attempt_no)
 INDEX(process_id) WHERE status = 'completed'   -- progress EXISTS probe (012)
+INDEX(tenant_id, workspace_id, assignee_user_id, started_at)
+  WHERE status = 'active' AND assignee_user_id IS NOT NULL   -- future "my active work" (013)
 ```
 
 The composite process FK (migration 011 also adds
@@ -440,6 +457,15 @@ carry `completed_at >= started_at` + `completed_by`, `cancelled` rows carry
 columns stay NULL. `updated_at` exists only to timestamp the single
 terminal write — terminal attempts never change again; retry inserts a new
 attempt (`MAX(attempt_no)+1`) under the project-level serialization lock.
+
+`assignee_user_id` (STEP 21C, ADR 0018) is the immutable responsibility
+snapshot: the process's current assignee captured at START under the same
+serialization, written only by INSERT and never updated — reassignment of
+the process does not touch running or terminal attempts. It deliberately
+references `users(id)` (not workspace membership) so history survives
+every membership lifecycle change. It is independent from the actor
+fields: `started_by` answers "who pressed Start", `assignee_user_id`
+answers "who was responsible for this work when it began".
 
 Archive guards: archiving a process with an active execution, a work item
 with any active descendant execution, a section whose subtree contains any
@@ -1236,7 +1262,8 @@ as mandated by AGENTS.md. Their UI/dispatch features remain in their planned pha
 010 dynamic properties
 011 process_executions (implemented as immutable attempt records, STEP 21A)
 012 dependencies
-013 assignments
+013 assignments (implemented as processes.assignee_user_id +
+    process_executions.assignee_user_id snapshot, STEP 21C)
 014 time_sessions + stop_reasons
 015 template foundations
 016 notifications

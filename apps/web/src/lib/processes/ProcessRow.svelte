@@ -8,6 +8,7 @@
   import Icon from '$lib/ui/Icon.svelte';
   import { translate, type Locale } from '$lib/i18n';
   import type { ExecutionPublic, ProcessPublic } from '$lib/api/client';
+  import { assigneeView } from './assignee';
   let {
     process,
     index,
@@ -16,6 +17,7 @@
     canUpdate,
     canArchive,
     canReorder,
+    canAssign,
     canStart,
     canComplete,
     canCancel,
@@ -25,6 +27,7 @@
     onMove,
     onEdit,
     onArchive,
+    onAssign,
     onStart,
     onComplete,
     onCancel,
@@ -36,6 +39,7 @@
     canUpdate: boolean;
     canArchive: boolean;
     canReorder: boolean;
+    canAssign: boolean;
     canStart: boolean;
     canComplete: boolean;
     canCancel: boolean;
@@ -45,6 +49,7 @@
     onMove: (delta: -1 | 1) => void;
     onEdit: () => void;
     onArchive: () => void;
+    onAssign: () => void;
     onStart: () => void;
     onComplete: (id: string) => void;
     onCancel: (id: string) => void;
@@ -53,12 +58,18 @@
   const menuItems = $derived.by<MenuItem[]>(() => {
     const items: (MenuItem | null)[] = [
       canUpdate ? { label: translate(locale, 'processes.edit'), onSelect: onEdit } : null,
+      canAssign
+        ? { label: translate(locale, 'processes.assignee.change'), onSelect: onAssign }
+        : null,
       canUpdate && canArchive
         ? { label: translate(locale, 'processes.archive'), danger: true, onSelect: onArchive }
         : null,
     ];
     return items.filter((item): item is MenuItem => item !== null);
   });
+  // Assignee presentation is a derived view-model — the backend's eligible
+  // flag passes through; the chip never recomputes membership itself.
+  const assignee = $derived(assigneeView(process, locale));
 
   const active = $derived(attempts.find((a) => a.status === 'active'));
   const latest = $derived(attempts[attempts.length - 1]);
@@ -109,6 +120,22 @@
     ><span aria-hidden="true">{process.is_required ? '●' : '○'}</span>
     {translate(locale, process.is_required ? 'processes.required' : 'processes.optional')}</span
   >
+  <span
+    class="assignee-chip"
+    class:assignee-unassigned={!assignee.assigned}
+    class:assignee-stale={assignee.stale}
+    data-testid="assignee-{process.id}"
+  >
+    {#if assignee.assigned}
+      <span class="assignee-avatar" aria-hidden="true">{assignee.initials}</span>
+      <span class="assignee-name">{assignee.name}</span>
+      {#if assignee.stale}
+        <span class="assignee-warning">{translate(locale, 'processes.assignee.stale')}</span>
+      {/if}
+    {:else}
+      <span class="assignee-name">{translate(locale, 'processes.assignee.unassigned')}</span>
+    {/if}
+  </span>
   {#if canReorder || menuItems.length > 0}
     <div class="process-actions">
       {#if canReorder}

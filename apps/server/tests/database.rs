@@ -50,10 +50,23 @@ async fn migrated_database_is_ready_and_up_is_idempotent(
 async fn migration_can_revert_and_reapply_on_disposable_database(
     pool: PgPool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Newest first: 012 drops only its supporting index, then 011's table.
-    // revert_last requires a fully-applied history, so the second revert goes
-    // through undo() directly (down to the 010 version).
+    // Newest first: 013 drops assignment columns/indexes/permission, then
+    // 012's index, then 011's table. revert_last requires a fully-applied
+    // history, so subsequent reverts go through undo() directly.
     migrations::revert_last(&pool).await?;
+    let assignee_column: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.columns \
+         WHERE table_name = 'processes' AND column_name = 'assignee_user_id')",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(!assignee_column, "revert must drop the 013 assignee column");
+    let assign_permission: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM permissions WHERE key = 'processes:assign'")
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(assign_permission, 0, "revert must remove processes:assign");
+    MIGRATOR.undo(&pool, 20260926100000).await?;
     let index_exists: bool = sqlx::query_scalar(
         "SELECT EXISTS (SELECT 1 FROM pg_indexes WHERE indexname = 'process_executions_completed_idx')",
     )
@@ -115,15 +128,16 @@ async fn changed_migration_checksum_is_rejected(
 #[sqlx::test(migrations = "../../migrations")]
 async fn revert_preserves_dependent_data(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
     // A dependent object on an earlier table must block rollback instead of
-    // being dropped. 012 (index-only) reverts cleanly first; the dependent
-    // then blocks 011's undo — the failure must reach undo(), not the
-    // pre-revert history check.
+    // being dropped. 013 and 012 revert cleanly first; the dependent then
+    // blocks 011's undo — the failure must reach undo(), not the pre-revert
+    // history check.
     sqlx::query(
         "CREATE TABLE migration_safety_probe (execution_id uuid REFERENCES process_executions (id))",
     )
         .execute(&pool)
         .await?;
     migrations::revert_last(&pool).await?;
+    assert!(MIGRATOR.undo(&pool, 20260926100000).await.is_ok());
     assert!(MIGRATOR.undo(&pool, 20260924100000).await.is_err());
     MIGRATOR.run(&pool).await?;
     migrations::verify(&pool).await?;

@@ -1695,6 +1695,7 @@ async fn migration_backfill_preserves_assignments_and_member_has_no_grants(pool:
         grants,
         vec![
             "processes:archive",
+            "processes:assign",
             "processes:create",
             "processes:reorder",
             "processes:update"
@@ -1742,16 +1743,16 @@ async fn migration_backfill_preserves_assignments_and_member_has_no_grants(pool:
     .fetch_one(&pool)
     .await
     .unwrap_or_else(|error| panic!("{error}"));
-    assert_eq!(fresh_grants, 4);
+    assert_eq!(fresh_grants, 5);
 }
 
 #[sqlx::test(migrations = "../../migrations")]
 async fn rollback_is_blocked_by_dependents_and_reapplies(pool: PgPool) {
     let f = Fixture::new(&pool).await;
     f.create("Kept").await;
-    // The newest migrations are 012 (index-only, no dependents) then 011
-    // (process_executions): a dependent object on the executions table must
-    // block 011's down migration without CASCADE.
+    // The newest migrations are 013 (assignment columns/grant) then 012
+    // (index-only), both without dependents: a dependent object on the
+    // executions table must block 011's down migration without CASCADE.
     exec(
         &pool,
         "CREATE TABLE process_dependency_probe (execution_id uuid REFERENCES process_executions (id))",
@@ -1759,7 +1760,7 @@ async fn rollback_is_blocked_by_dependents_and_reapplies(pool: PgPool) {
     .await;
     platform_server::migrations::revert_last(&pool)
         .await
-        .unwrap_or_else(|error| panic!("012 index down must apply: {error}"));
+        .unwrap_or_else(|error| panic!("013 assignment down must apply: {error}"));
     assert!(MIGRATOR.undo(&pool, 20260924100000).await.is_err());
     let kept: i64 = sqlx::query_scalar("SELECT count(*) FROM processes")
         .fetch_one(&pool)

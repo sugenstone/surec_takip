@@ -1045,7 +1045,7 @@ dialog .menu-item {
 }
 .process-row {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
   align-items: center;
   gap: var(--space-3);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
@@ -1098,6 +1098,46 @@ dialog .menu-item {
 .requirement-badge[data-required='false'] {
   color: var(--muted-foreground);
   background: transparent;
+  border-style: dashed;
+}
+/* Assignee chip (STEP 21C): compact identity — avatar glyph + name. The
+   stale state adds a text warning, never color alone. */
+.assignee-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-width: 0;
+  font-size: var(--text-caption);
+  color: var(--foreground);
+}
+.assignee-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-caption);
+  font-weight: 700;
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+}
+.assignee-name {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.assignee-unassigned .assignee-name {
+  color: var(--muted-foreground);
+}
+.assignee-warning {
+  font-size: var(--text-caption);
+  color: var(--muted-foreground);
+  font-style: italic;
+  white-space: nowrap;
+}
+.assignee-stale .assignee-avatar {
   border-style: dashed;
 }
 .process-actions {
@@ -1247,6 +1287,11 @@ dialog .menu-item {
   .requirement-badge {
     grid-column: 2;
     justify-self: start;
+  }
+  .assignee-chip {
+    grid-column: 2;
+    justify-self: start;
+    margin-block-start: calc(-1 * var(--space-1));
   }
   .process-actions {
     grid-column: 1 / -1;

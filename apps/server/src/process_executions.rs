@@ -80,6 +80,10 @@ pub struct ExecutionPublic {
     pub started_by_user_id: Uuid,
     pub completed_by_user_id: Option<Uuid>,
     pub cancelled_by_user_id: Option<Uuid>,
+    /// Responsibility snapshot (STEP 21C, ADR 0018): who the process was
+    /// assigned to when this attempt began. Written once at INSERT, never
+    /// updated; distinct from the actor fields above.
+    pub assignee_user_id: Option<Uuid>,
 }
 
 // Timestamps serialize as ISO-8601 UTC strings (invitations convention); the
@@ -90,7 +94,8 @@ const COLUMNS: &str = "id, tenant_id AS organization_id, workspace_id, project_i
     to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS started_at, \
     to_char(completed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS completed_at, \
     to_char(cancelled_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS cancelled_at, \
-    start_reason, cancel_reason, started_by_user_id, completed_by_user_id, cancelled_by_user_id";
+    start_reason, cancel_reason, started_by_user_id, completed_by_user_id, cancelled_by_user_id, \
+    assignee_user_id";
 const SCOPE: &str = "tenant_id = $1 AND workspace_id = $2 AND project_id = $3 AND section_id = $4 AND work_item_id = $5 AND process_id = $6";
 
 #[derive(Debug)]
@@ -243,16 +248,12 @@ pub async fn list_for_work_item(
     work_item_id: Uuid,
 ) -> Result<(Vec<ExecutionPublic>, String), ExecutionError> {
     let mut conn = pool.acquire().await.map_err(database_error)?;
-    let sql = "SELECT id, tenant_id AS organization_id, workspace_id, project_id, section_id, \
-        work_item_id, process_id, attempt_no, status, \
-        to_char(started_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS started_at, \
-        to_char(completed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS completed_at, \
-        to_char(cancelled_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS cancelled_at, \
-        start_reason, cancel_reason, started_by_user_id, completed_by_user_id, cancelled_by_user_id \
-        FROM process_executions \
+    let sql = format!(
+        "SELECT {COLUMNS} FROM process_executions \
         WHERE tenant_id = $1 AND workspace_id = $2 AND project_id = $3 AND section_id = $4 AND work_item_id = $5 \
-        ORDER BY process_id, attempt_no";
-    let rows = sqlx::query_as::<_, ExecutionPublic>(sql)
+        ORDER BY process_id, attempt_no"
+    );
+    let rows = sqlx::query_as::<_, ExecutionPublic>(&sql)
         .bind(scope.organization_id)
         .bind(scope.workspace_id)
         .bind(scope.project_id)
@@ -353,15 +354,35 @@ pub async fn start_execution(
         .await
         .map_err(database_error)?;
     let attempt_no = i32::try_from(next).map_err(|_| invalid("attempt_no"))?;
+    // Responsibility snapshot (ADR 0018): read the process's CURRENT assignee
+    // inside this transaction. The process row is already FOR SHARE-locked by
+    // lock_parent, so a concurrent reassignment serializes — the snapshot is
+    // always one complete, consistent value, never a mixed read.
+    let assignee = sqlx::query_scalar::<_, Option<Uuid>>(
+        "SELECT assignee_user_id FROM processes \
+         WHERE tenant_id = $1 AND workspace_id = $2 AND project_id = $3 \
+           AND section_id = $4 AND work_item_id = $5 AND id = $6",
+    )
+    .bind(scope.organization_id)
+    .bind(scope.workspace_id)
+    .bind(scope.project_id)
+    .bind(scope.section_id)
+    .bind(scope.work_item_id)
+    .bind(scope.process_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(database_error)?
+    .ok_or(ExecutionError::NotAccessible)?;
     let sql = format!(
-        "INSERT INTO process_executions (id, tenant_id, workspace_id, project_id, section_id, work_item_id, process_id, attempt_no, start_reason, started_by_user_id) \
-         VALUES ($7, $1, $2, $3, $4, $5, $6, $8, $9, $10) RETURNING {COLUMNS}"
+        "INSERT INTO process_executions (id, tenant_id, workspace_id, project_id, section_id, work_item_id, process_id, attempt_no, start_reason, started_by_user_id, assignee_user_id) \
+         VALUES ($7, $1, $2, $3, $4, $5, $6, $8, $9, $10, $11) RETURNING {COLUMNS}"
     );
     let row = bind_scope(sqlx::query_as(&sql), scope)
         .bind(Uuid::now_v7())
         .bind(attempt_no)
         .bind(start_reason)
         .bind(actor)
+        .bind(assignee)
         .fetch_one(&mut *tx)
         .await
         .map_err(database_error)?;

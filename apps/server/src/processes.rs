@@ -1,8 +1,9 @@
 //! Ordered process DEFINITIONS inside a work item (ADR 0015).
 //!
-//! Configuration only: which processes exist, their order and whether they
-//! are required. Runtime execution (start/finish, timers, assignees,
-//! progress) is a separate future model that references these rows by id.
+//! Definitions plus current responsibility (STEP 21C, ADR 0018):
+//! `assignee_user_id` is mutable responsibility metadata — not authorization,
+//! not history. Runtime execution (attempts, timers) lives in
+//! `process_executions` (ADR 0016); progress is derived (ADR 0017).
 use crate::{
     AppState, RequestId,
     auth::ApiJson,
@@ -23,6 +24,7 @@ pub const PROCESSES_CREATE: PermissionKey = PermissionKey("processes:create");
 pub const PROCESSES_UPDATE: PermissionKey = PermissionKey("processes:update");
 pub const PROCESSES_ARCHIVE: PermissionKey = PermissionKey("processes:archive");
 pub const PROCESSES_REORDER: PermissionKey = PermissionKey("processes:reorder");
+pub const PROCESSES_ASSIGN: PermissionKey = PermissionKey("processes:assign");
 
 const DESCRIPTION_MAX_CHARS: usize = 2000;
 
@@ -56,7 +58,18 @@ impl ProcessScope {
     }
 }
 
-#[derive(Clone, Debug, Serialize, sqlx::FromRow, ToSchema)]
+/// Minimal public identity of a process assignee (STEP 21C, ADR 0018).
+/// `eligible` reports whether the assignee still satisfies membership/user
+/// activation rules — a stale assignee remains displayed for history but
+/// must not be presented as an active member.
+#[derive(Clone, Debug, Serialize, ToSchema)]
+pub struct AssigneePublic {
+    pub id: Uuid,
+    pub display_name: String,
+    pub eligible: bool,
+}
+
+#[derive(Clone, Debug, Serialize, ToSchema)]
 pub struct ProcessPublic {
     pub id: Uuid,
     pub organization_id: Uuid,
@@ -70,11 +83,68 @@ pub struct ProcessPublic {
     pub position: i32,
     pub is_required: bool,
     pub status: String,
+    /// Current responsible user; `null` means unassigned. Assignment is
+    /// responsibility metadata, never authorization (ADR 0018).
+    pub assignee: Option<AssigneePublic>,
 }
 
-const COLUMNS: &str = "id, tenant_id AS organization_id, workspace_id, project_id, section_id, work_item_id, name, slug::text AS slug, description, position, is_required, status";
-const SCOPE: &str = "tenant_id = $1 AND workspace_id = $2 AND project_id = $3 AND section_id = $4 AND work_item_id = $5";
-const VISIBLE: &str = "deleted_at IS NULL AND status = 'active'";
+#[derive(sqlx::FromRow)]
+struct ProcessRow {
+    id: Uuid,
+    organization_id: Uuid,
+    workspace_id: Uuid,
+    project_id: Uuid,
+    section_id: Uuid,
+    work_item_id: Uuid,
+    name: String,
+    slug: String,
+    description: Option<String>,
+    position: i32,
+    is_required: bool,
+    status: String,
+    assignee_user_id: Option<Uuid>,
+    assignee_display_name: Option<String>,
+    assignee_eligible: Option<bool>,
+}
+impl From<ProcessRow> for ProcessPublic {
+    fn from(row: ProcessRow) -> Self {
+        Self {
+            id: row.id,
+            organization_id: row.organization_id,
+            workspace_id: row.workspace_id,
+            project_id: row.project_id,
+            section_id: row.section_id,
+            work_item_id: row.work_item_id,
+            name: row.name,
+            slug: row.slug,
+            description: row.description,
+            position: row.position,
+            is_required: row.is_required,
+            status: row.status,
+            assignee: row.assignee_user_id.map(|id| AssigneePublic {
+                id,
+                display_name: row.assignee_display_name.unwrap_or_default(),
+                eligible: row.assignee_eligible.unwrap_or(false),
+            }),
+        }
+    }
+}
+
+// Eligibility is derived set-based in one statement: active user + active
+// organization membership + active workspace membership. The join stays
+// valid for a stale assignee because the composite FK references the
+// membership ROW, which survives revocation (soft lifecycle columns only).
+const COLUMNS: &str = "p.id, p.tenant_id AS organization_id, p.workspace_id, p.project_id, p.section_id, p.work_item_id, p.name, p.slug::text AS slug, p.description, p.position, p.is_required, p.status, p.assignee_user_id, \
+    u.display_name AS assignee_display_name, \
+    (u.status = 'active' AND wm.id IS NOT NULL AND om.id IS NOT NULL) AS assignee_eligible";
+const FROM: &str = "processes p \
+    LEFT JOIN users u ON u.id = p.assignee_user_id \
+    LEFT JOIN workspace_memberships wm ON wm.workspace_id = p.workspace_id \
+        AND wm.user_id = p.assignee_user_id AND wm.status = 'active' AND wm.deleted_at IS NULL \
+    LEFT JOIN organization_memberships om ON om.tenant_id = p.tenant_id \
+        AND om.user_id = p.assignee_user_id AND om.status = 'active' AND om.deleted_at IS NULL";
+const SCOPE: &str = "p.tenant_id = $1 AND p.workspace_id = $2 AND p.project_id = $3 AND p.section_id = $4 AND p.work_item_id = $5";
+const VISIBLE: &str = "p.deleted_at IS NULL AND p.status = 'active'";
 
 #[derive(Debug)]
 pub enum ProcessError {
@@ -149,6 +219,45 @@ pub struct UpdateProcessRequest {
 }
 #[derive(Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
+pub struct UpdateAssignmentRequest {
+    /// A workspace-member user id to assign, or `null` to unassign. The key
+    /// itself is required — an omitted `user_id` is a malformed request
+    /// (400), never a silent unassign.
+    #[schema(required)]
+    #[serde(deserialize_with = "required_nullable")]
+    pub user_id: Option<Uuid>,
+}
+fn required_nullable<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::deserialize(deserializer)
+}
+#[cfg(test)]
+mod tests {
+    use super::UpdateAssignmentRequest;
+    use uuid::Uuid;
+
+    #[test]
+    fn assignment_body_requires_the_user_id_key() {
+        assert!(
+            serde_json::from_str::<UpdateAssignmentRequest>("{}").is_err(),
+            "missing user_id must be malformed, not an implicit unassign"
+        );
+        let nulled = serde_json::from_str::<UpdateAssignmentRequest>(r#"{"user_id":null}"#)
+            .unwrap_or_else(|error| panic!("explicit null must parse: {error}"));
+        assert_eq!(nulled.user_id, None, "explicit null unassigns");
+        let id = Uuid::now_v7();
+        let parsed =
+            serde_json::from_str::<UpdateAssignmentRequest>(&format!(r#"{{"user_id":"{id}"}}"#))
+                .unwrap_or_else(|error| panic!("uuid user_id must parse: {error}"));
+        assert_eq!(parsed.user_id, Some(id));
+    }
+}
+
+#[derive(Deserialize, ToSchema)]
+#[serde(deny_unknown_fields)]
 pub struct ReorderProcessesRequest {
     /// Every active process of the work item, exactly once, in the desired order.
     pub process_ids: Vec<Uuid>,
@@ -199,24 +308,53 @@ pub async fn find_accessible(
     scope: ProcessScope,
     id: Uuid,
 ) -> Result<Option<ProcessPublic>, ProcessError> {
-    let sql = format!("SELECT {COLUMNS} FROM processes WHERE {SCOPE} AND id = $6 AND {VISIBLE}");
-    bind_scope(sqlx::query_as(&sql), scope)
+    let sql = format!("SELECT {COLUMNS} FROM {FROM} WHERE {SCOPE} AND p.id = $6 AND {VISIBLE}");
+    bind_scope(sqlx::query_as::<_, ProcessRow>(&sql), scope)
         .bind(id)
         .fetch_optional(pool)
         .await
         .map_err(database_error)
+        .map(|row| row.map(ProcessPublic::from))
 }
 pub async fn visible_for_work_item(
     pool: &PgPool,
     scope: ProcessScope,
 ) -> Result<Vec<ProcessPublic>, ProcessError> {
     let sql = format!(
-        "SELECT {COLUMNS} FROM processes WHERE {SCOPE} AND {VISIBLE} ORDER BY position, id"
+        "SELECT {COLUMNS} FROM {FROM} WHERE {SCOPE} AND {VISIBLE} ORDER BY p.position, p.id"
     );
-    bind_scope(sqlx::query_as(&sql), scope)
+    bind_scope(sqlx::query_as::<_, ProcessRow>(&sql), scope)
         .fetch_all(pool)
         .await
         .map_err(database_error)
+        .map(|rows| rows.into_iter().map(ProcessPublic::from).collect())
+}
+
+/// Re-read one process inside a mutation transaction so `RETURNING`-free
+/// writes can still emit the joined assignee columns. `visible` toggles the
+/// active-only predicate — an archive PATCH legitimately produces an
+/// archived row that must still be returned.
+async fn fetch_in_tx(
+    tx: &mut PgConnection,
+    scope: ProcessScope,
+    id: Uuid,
+    visible_only: bool,
+) -> Result<ProcessPublic, ProcessError> {
+    let sql = format!(
+        "SELECT {COLUMNS} FROM {FROM} WHERE {SCOPE} AND p.id = $6 AND p.deleted_at IS NULL {}",
+        if visible_only {
+            "AND p.status = 'active'"
+        } else {
+            ""
+        }
+    );
+    bind_scope(sqlx::query_as::<_, ProcessRow>(&sql), scope)
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(database_error)?
+        .map(ProcessPublic::from)
+        .ok_or(ProcessError::NotAccessible)
 }
 
 /// Lock order (ADR 0015) extends the work item order without reordering it:
@@ -295,7 +433,7 @@ pub async fn create_process(
     // process can never collide with an active position. Bigint
     // intermediate turns exhausted ordering into validation, not overflow.
     let sql =
-        format!("SELECT COALESCE(max(position)::bigint, -1) + 1 FROM processes WHERE {SCOPE}");
+        format!("SELECT COALESCE(max(p.position)::bigint, -1) + 1 FROM processes p WHERE {SCOPE}");
     let next: i64 = sqlx::query_scalar(&sql)
         .bind(scope.organization_id)
         .bind(scope.workspace_id)
@@ -306,11 +444,14 @@ pub async fn create_process(
         .await
         .map_err(database_error)?;
     let position = i32::try_from(next).map_err(|_| invalid("position"))?;
-    let sql = format!(
-        "INSERT INTO processes (id, tenant_id, workspace_id, project_id, section_id, work_item_id, name, slug, description, position, is_required) \
-         VALUES ($6, $1, $2, $3, $4, $5, $7, $8, $9, $10, $11) RETURNING {COLUMNS}"
-    );
-    let row = bind_scope(sqlx::query_as(&sql), scope)
+    let sql = "INSERT INTO processes (id, tenant_id, workspace_id, project_id, section_id, work_item_id, name, slug, description, position, is_required) \
+         VALUES ($6, $1, $2, $3, $4, $5, $7, $8, $9, $10, $11) RETURNING id";
+    let id: Uuid = sqlx::query_scalar(sql)
+        .bind(scope.organization_id)
+        .bind(scope.workspace_id)
+        .bind(scope.project_id)
+        .bind(scope.section_id)
+        .bind(scope.work_item_id)
         .bind(Uuid::now_v7())
         .bind(name)
         .bind(slug)
@@ -320,6 +461,7 @@ pub async fn create_process(
         .fetch_one(&mut *tx)
         .await
         .map_err(database_error)?;
+    let row = fetch_in_tx(&mut tx, scope, id, true).await?;
     tx.commit().await.map_err(database_error)?;
     Ok(row)
 }
@@ -334,13 +476,14 @@ pub async fn update_process(
     let mut tx = pool.begin().await.map_err(database_error)?;
     lock_parent(&mut tx, scope, actor).await?;
     let sql = format!(
-        "SELECT {COLUMNS} FROM processes WHERE {SCOPE} AND id = $6 AND {VISIBLE} FOR UPDATE"
+        "SELECT {COLUMNS} FROM {FROM} WHERE {SCOPE} AND p.id = $6 AND {VISIBLE} FOR UPDATE OF p"
     );
-    let current: ProcessPublic = bind_scope(sqlx::query_as(&sql), scope)
+    let current: ProcessPublic = bind_scope(sqlx::query_as::<_, ProcessRow>(&sql), scope)
         .bind(id)
         .fetch_optional(&mut *tx)
         .await
         .map_err(database_error)?
+        .map(ProcessPublic::from)
         .ok_or(ProcessError::NotAccessible)?;
     require_permission(&mut tx, scope, actor, PROCESSES_UPDATE).await?;
     let status = input
@@ -377,19 +520,25 @@ pub async fn update_process(
     };
     let is_required = input.is_required.unwrap_or(current.is_required);
     let sql = format!(
-        "UPDATE processes SET name = $7, slug = $8, description = $9, is_required = $10, status = $11, updated_at = now() \
-         WHERE {SCOPE} AND id = $6 AND {VISIBLE} RETURNING {COLUMNS}"
+        "UPDATE processes p SET name = $7, slug = $8, description = $9, is_required = $10, status = $11, updated_at = now() \
+         WHERE {SCOPE} AND p.id = $6 AND {VISIBLE}"
     );
-    let row = bind_scope(sqlx::query_as(&sql), scope)
+    sqlx::query(&sql)
+        .bind(scope.organization_id)
+        .bind(scope.workspace_id)
+        .bind(scope.project_id)
+        .bind(scope.section_id)
+        .bind(scope.work_item_id)
         .bind(id)
         .bind(name)
         .bind(slug)
         .bind(description)
         .bind(is_required)
         .bind(status)
-        .fetch_one(&mut *tx)
+        .execute(&mut *tx)
         .await
         .map_err(database_error)?;
+    let row = fetch_in_tx(&mut tx, scope, id, false).await?;
     tx.commit().await.map_err(database_error)?;
     Ok(row)
 }
@@ -413,7 +562,7 @@ pub async fn reorder_processes(
         return Err(invalid("process_ids"));
     }
     let sql = format!(
-        "SELECT id, position FROM processes WHERE {SCOPE} AND {VISIBLE} ORDER BY position, id FOR UPDATE"
+        "SELECT p.id, p.position FROM processes p WHERE {SCOPE} AND {VISIBLE} ORDER BY p.position, p.id FOR UPDATE"
     );
     let active: Vec<(Uuid, i32)> = sqlx::query_as(&sql)
         .bind(scope.organization_id)
@@ -456,14 +605,83 @@ pub async fn reorder_processes(
         }
     }
     let sql = format!(
-        "SELECT {COLUMNS} FROM processes WHERE {SCOPE} AND {VISIBLE} ORDER BY position, id"
+        "SELECT {COLUMNS} FROM {FROM} WHERE {SCOPE} AND {VISIBLE} ORDER BY p.position, p.id"
     );
-    let rows = bind_scope(sqlx::query_as(&sql), scope)
+    let rows: Vec<ProcessPublic> = bind_scope(sqlx::query_as::<_, ProcessRow>(&sql), scope)
         .fetch_all(&mut *tx)
         .await
-        .map_err(database_error)?;
+        .map_err(database_error)?
+        .into_iter()
+        .map(ProcessPublic::from)
+        .collect();
     tx.commit().await.map_err(database_error)?;
     Ok(rows)
+}
+
+/// ASSIGN (STEP 21C, ADR 0018): set or clear the responsible user of a
+/// process. `user_id: null` unassigns; a uuid must currently be eligible
+/// (active user + active organization membership + active workspace
+/// membership). Eligibility is re-proven inside the transaction and the
+/// membership row is locked FOR SHARE so a concurrent revocation serializes
+/// instead of slipping a stale assignee past the check. Ineligible ids share
+/// one generic 422 — never a cross-tenant existence oracle.
+pub async fn assign_process(
+    pool: &PgPool,
+    scope: ProcessScope,
+    id: Uuid,
+    actor: Uuid,
+    input: &UpdateAssignmentRequest,
+) -> Result<ProcessPublic, ProcessError> {
+    let mut tx = pool.begin().await.map_err(database_error)?;
+    lock_parent(&mut tx, scope, actor).await?;
+    require_permission(&mut tx, scope, actor, PROCESSES_ASSIGN).await?;
+    let sql = format!(
+        "SELECT p.id FROM processes p WHERE {SCOPE} AND p.id = $6 AND {VISIBLE} FOR UPDATE"
+    );
+    bind_scope(sqlx::query_as::<_, (Uuid,)>(&sql), scope)
+        .bind(id)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(database_error)?
+        .ok_or(ProcessError::NotAccessible)?;
+    if let Some(assignee) = input.user_id {
+        let eligible = sqlx::query_scalar::<_, Uuid>(
+            "SELECT wm.id FROM workspace_memberships wm \
+             JOIN organization_memberships om ON om.tenant_id = wm.tenant_id \
+                 AND om.user_id = wm.user_id AND om.status = 'active' AND om.deleted_at IS NULL \
+             JOIN users u ON u.id = wm.user_id AND u.status = 'active' \
+             WHERE wm.tenant_id = $1 AND wm.workspace_id = $2 AND wm.user_id = $3 \
+               AND wm.status = 'active' AND wm.deleted_at IS NULL \
+             FOR SHARE OF wm, om, u",
+        )
+        .bind(scope.organization_id)
+        .bind(scope.workspace_id)
+        .bind(assignee)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(database_error)?;
+        if eligible.is_none() {
+            return Err(invalid("user_id"));
+        }
+    }
+    let sql = format!(
+        "UPDATE processes p SET assignee_user_id = $6, updated_at = now() \
+         WHERE {SCOPE} AND p.id = $7 AND {VISIBLE}"
+    );
+    sqlx::query(&sql)
+        .bind(scope.organization_id)
+        .bind(scope.workspace_id)
+        .bind(scope.project_id)
+        .bind(scope.section_id)
+        .bind(scope.work_item_id)
+        .bind(input.user_id)
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .map_err(database_error)?;
+    let row = fetch_in_tx(&mut tx, scope, id, true).await?;
+    tx.commit().await.map_err(database_error)?;
+    Ok(row)
 }
 
 async fn check_permission(
@@ -568,6 +786,30 @@ pub async fn update_process_handler(
     check_permission(&state, &context.parent, PROCESSES_UPDATE, &request_id).await?;
     let ApiJson(body) = body?;
     let data = update_process(
+        &state.pool,
+        ProcessScope::of(&context.parent),
+        context.process.id,
+        context.parent.parent.user_id,
+        &body,
+    )
+    .await
+    .map_err(|e| api_error(e, &request_id))?;
+    Ok(Json(ProcessMutationResponse { data }))
+}
+
+#[utoipa::path(put, path = "/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/assignment",
+request_body = UpdateAssignmentRequest,
+params(("organization_id" = Uuid, Path),("workspace_id" = Uuid, Path),("project_id" = Uuid, Path),("section_id" = Uuid, Path),("work_item_id" = Uuid, Path),("process_id" = Uuid, Path)),
+responses((status = 200, body = ProcessMutationResponse),(status = 400, body = crate::error::ErrorEnvelope),(status = 401, body = crate::error::ErrorEnvelope),(status = 403, body = crate::error::ErrorEnvelope),(status = 404, body = crate::error::ErrorEnvelope),(status = 422, body = crate::error::ErrorEnvelope)))]
+pub async fn assign_process_handler(
+    State(state): State<AppState>,
+    Extension(request_id): Extension<RequestId>,
+    context: ProcessContext,
+    body: Result<ApiJson<UpdateAssignmentRequest>, ApiError>,
+) -> Result<Json<ProcessMutationResponse>, ApiError> {
+    check_permission(&state, &context.parent, PROCESSES_ASSIGN, &request_id).await?;
+    let ApiJson(body) = body?;
+    let data = assign_process(
         &state.pool,
         ProcessScope::of(&context.parent),
         context.process.id,
