@@ -1290,6 +1290,15 @@ dialog .menu-item {
   background: color-mix(in srgb, var(--primary) 12%, transparent);
   color: var(--foreground);
   font-weight: 600;
+  min-width: 0;
+  max-width: 100%;
+}
+.worker-name {
+  overflow-wrap: anywhere;
+}
+.worker-time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 @media (max-width: 40rem) {
   /* Narrow screens: badge and actions wrap under the name instead of

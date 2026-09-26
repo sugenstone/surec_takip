@@ -241,6 +241,7 @@ export const en: Record<keyof typeof tr, string> = {
   'sessions.you': 'you',
   'sessions.startWork': 'Start work',
   'sessions.pause': 'Pause work',
+  'sessions.workDuration': '{name} work duration: {duration}',
   'sessions.error.activeElsewhere':
     'You already have an active work session. Pause it before starting another.',
   'sessions.error.conflict': 'The work session state changed meanwhile. Refreshing the list.',

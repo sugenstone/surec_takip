@@ -9,6 +9,7 @@
   import { translate, type Locale } from '$lib/i18n';
   import type { ExecutionPublic, ProcessPublic, TimeSessionPublic } from '$lib/api/client';
   import { assigneeView } from './assignee';
+  import { sessionElapsedMs } from './sessions';
   let {
     process,
     index,
@@ -242,8 +243,19 @@
           <span class="muted">{translate(locale, 'sessions.working')}:</span>
           {#each sessions as session (session.id)}
             <span class="worker-chip"
-              >{session.worker.display_name}{#if session.worker.id === currentUserId}
-                ({translate(locale, 'sessions.you')}){/if}</span
+              ><span class="worker-name"
+                >{session.worker.display_name}{#if session.worker.id === currentUserId}
+                  ({translate(locale, 'sessions.you')}){/if}</span
+              ><span aria-hidden="true"> · </span><span
+                class="worker-time"
+                role="timer"
+                aria-label={translate(locale, 'sessions.workDuration', {
+                  name: session.worker.display_name,
+                  duration: formatDuration(sessionElapsedMs(session, serverTime, now, anchoredAt)),
+                })}
+                data-testid="work-time-{session.id}"
+                >{formatDuration(sessionElapsedMs(session, serverTime, now, anchoredAt))}</span
+              ></span
             >
           {/each}
         </span>

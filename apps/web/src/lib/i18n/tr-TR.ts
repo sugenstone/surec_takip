@@ -236,6 +236,7 @@ export const tr = {
   'sessions.you': 'sen',
   'sessions.startWork': 'Çalışmaya başla',
   'sessions.pause': 'Çalışmayı duraklat',
+  'sessions.workDuration': '{name} çalışma süresi: {duration}',
   'sessions.error.activeElsewhere':
     'Zaten açık bir çalışma oturumunuz var. Yenisini başlatmadan önce onu duraklatın.',
   'sessions.error.conflict': 'Çalışma oturumunun durumu bu arada değişti. Liste yenileniyor.',
