@@ -96,7 +96,7 @@ const COLUMNS: &str = "id, tenant_id AS organization_id, workspace_id, project_i
     to_char(cancelled_at AT TIME ZONE 'UTC', 'YYYY-MM-DD\"T\"HH24:MI:SS\"Z\"') AS cancelled_at, \
     start_reason, cancel_reason, started_by_user_id, completed_by_user_id, cancelled_by_user_id, \
     assignee_user_id";
-const SCOPE: &str = "tenant_id = $1 AND workspace_id = $2 AND project_id = $3 AND section_id = $4 AND work_item_id = $5 AND process_id = $6";
+pub(crate) const SCOPE: &str = "tenant_id = $1 AND workspace_id = $2 AND project_id = $3 AND section_id = $4 AND work_item_id = $5 AND process_id = $6";
 
 #[derive(Debug)]
 pub enum ExecutionError {
@@ -194,7 +194,7 @@ fn reason_value(
     Ok(Some(value.to_owned()))
 }
 
-fn bind_scope<'q, O>(
+pub(crate) fn bind_scope<'q, O>(
     query: sqlx::query::QueryAs<'q, sqlx::Postgres, O, sqlx::postgres::PgArguments>,
     scope: ExecutionScope,
 ) -> sqlx::query::QueryAs<'q, sqlx::Postgres, O, sqlx::postgres::PgArguments> {
@@ -206,7 +206,7 @@ fn bind_scope<'q, O>(
         .bind(scope.work_item_id)
         .bind(scope.process_id)
 }
-fn bind_scope_scalar<'q, T>(
+pub(crate) fn bind_scope_scalar<'q, T>(
     query: sqlx::query::QueryScalar<'q, sqlx::Postgres, T, sqlx::postgres::PgArguments>,
     scope: ExecutionScope,
 ) -> sqlx::query::QueryScalar<'q, sqlx::Postgres, T, sqlx::postgres::PgArguments> {
@@ -220,7 +220,7 @@ fn bind_scope_scalar<'q, T>(
 }
 
 /// Authoritative server timestamp for client timer anchoring.
-async fn server_time(executor: &mut PgConnection) -> Result<String, ExecutionError> {
+pub(crate) async fn server_time(executor: &mut PgConnection) -> Result<String, ExecutionError> {
     sqlx::query_scalar::<_, String>(&format!("SELECT to_char(now() AT TIME ZONE 'UTC', '{TS}')"))
         .fetch_one(executor)
         .await
@@ -272,7 +272,7 @@ pub async fn list_for_work_item(
 /// FOR SHARE → execution rows FOR UPDATE. The project lock serializes all
 /// writes in the project, so starts, transitions, retries and archive guards
 /// cannot interleave.
-async fn lock_parent(
+pub(crate) async fn lock_parent(
     tx: &mut PgConnection,
     scope: ExecutionScope,
     actor: Uuid,
@@ -303,7 +303,7 @@ async fn lock_parent(
     process.map(|_| ()).ok_or(ExecutionError::NotAccessible)
 }
 
-async fn require_permission(
+pub(crate) async fn require_permission(
     tx: &mut PgConnection,
     scope: ExecutionScope,
     actor: Uuid,
@@ -437,6 +437,13 @@ async fn transition_execution(
         query
     };
     let row = query.fetch_one(&mut *tx).await.map_err(database_error)?;
+    // ADR 0019: a terminal transition closes every open time session of this
+    // attempt atomically. now() = transaction_timestamp(), so each
+    // session.ended_at equals the execution's terminal timestamp exactly and
+    // ended_by records the transition actor (not the worker).
+    crate::time_sessions::close_open_sessions_in_tx(&mut tx, scope, id, actor)
+        .await
+        .map_err(database_error)?;
     let now = server_time(&mut tx).await?;
     tx.commit().await.map_err(database_error)?;
     Ok((row, now))

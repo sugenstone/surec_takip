@@ -88,3 +88,7 @@ required-features = ["integration"]
 [[test]]
 name = "assignments"
 required-features = ["integration"]
+
+[[test]]
+name = "time_sessions"
+required-features = ["integration"]

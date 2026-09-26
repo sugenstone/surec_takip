@@ -1277,6 +1277,20 @@ dialog .menu-item {
   flex-basis: 100%;
   overflow-wrap: anywhere;
 }
+.work-sessions {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  font-size: var(--text-caption);
+}
+.worker-chip {
+  padding: 0.0625rem var(--space-2);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  color: var(--foreground);
+  font-weight: 600;
+}
 @media (max-width: 40rem) {
   /* Narrow screens: badge and actions wrap under the name instead of
      squeezing it; the order number stays as the leading column. */

@@ -383,3 +383,43 @@ export async function cancelExecution(
     },
   );
 }
+
+// Time SESSIONS (STEP 21D / ADR 0019): tracked labor intervals on an
+// execution. V1 is self-service — the worker is always the authenticated
+// user, so the client sends no worker or timestamps; `server_time` keeps
+// the same clock-anchor contract as executions.
+export type TimeSessionPublic = components['schemas']['TimeSessionPublic'];
+export function executionSessionsPath(scope: ExecutionScope, executionId: string): string {
+  return `${executionsPath(scope)}/${executionId}/time-sessions`;
+}
+export function workItemSessionsPath(scope: ProcessScope): string {
+  return `${workItemsPath(scope)}/${scope.workItemId}/time-sessions`;
+}
+export async function listWorkItemOpenSessions(
+  scope: ProcessScope,
+): Promise<{ data: TimeSessionPublic[]; server_time: string }> {
+  return request<{ data: TimeSessionPublic[]; server_time: string }>(workItemSessionsPath(scope));
+}
+export async function startTimeSession(
+  scope: ExecutionScope,
+  executionId: string,
+): Promise<{ data: TimeSessionPublic; server_time: string }> {
+  return request<{ data: TimeSessionPublic; server_time: string }>(
+    executionSessionsPath(scope, executionId),
+    {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    },
+  );
+}
+export async function stopTimeSession(
+  scope: ExecutionScope,
+  executionId: string,
+  sessionId: string,
+): Promise<{ data: TimeSessionPublic; server_time: string }> {
+  return request<{ data: TimeSessionPublic; server_time: string }>(
+    `${executionSessionsPath(scope, executionId)}/${sessionId}/stop`,
+    { method: 'POST' },
+  );
+}

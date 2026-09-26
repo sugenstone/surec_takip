@@ -472,6 +472,49 @@ with any active descendant execution, a section whose subtree contains any
 active execution, or a project containing any active execution all fail
 with a state conflict — active work can never be silently hidden.
 
+### process_execution_time_sessions (implemented — STEP 21D, ADR 0019)
+
+Tracked labor intervals under executions; implemented by migration
+`20260929100000_time_sessions`. One row = one contiguous interval of ONE
+worker working on ONE attempt. Execution wall-clock (`started_at` →
+terminal columns) is deliberately NOT labor time — pause/resume is
+close-the-row plus insert-a-new-row; there is no `paused` status.
+
+```text
+id uuid PRIMARY KEY
+tenant_id uuid NOT NULL FK organizations
+workspace_id / project_id / section_id / work_item_id / process_id uuid NOT NULL
+process_execution_id uuid NOT NULL
+worker_user_id uuid NOT NULL FK users          -- labor identity (not membership)
+started_at timestamptz NOT NULL DEFAULT now()  -- DB clock is authoritative
+ended_at timestamptz NULL                      -- open when NULL
+started_by_user_id uuid NOT NULL FK users      -- actor who opened it
+ended_by_user_id uuid NULL FK users            -- actor who closed it
+created_at timestamptz NOT NULL DEFAULT now()
+FOREIGN KEY(tenant_id, workspace_id, project_id, section_id, work_item_id,
+            process_id, process_execution_id)
+  REFERENCES process_executions(tenant_id, ..., process_id, id)
+CHECK ((ended_at IS NULL AND ended_by_user_id IS NULL)
+    OR (ended_at >= started_at AND ended_by_user_id IS NOT NULL))
+INDEX(process_execution_id, started_at, id)
+INDEX(tenant_id, ..., work_item_id) WHERE ended_at IS NULL   -- live workers
+UNIQUE INDEX(tenant_id, worker_user_id) WHERE ended_at IS NULL
+```
+
+The execution composite FK (migration 014 adds
+`process_executions_scope_id_key UNIQUE(tenant_id, ..., process_id, id)`)
+makes a session structurally incapable of pointing at an execution outside
+its own hierarchy. `worker_user_id` references `users(id)` — not a
+membership — so revoked workers' history stays attributable (STEP 21C
+lesson); eligibility is enforced at INSERT time only.
+
+V1 rule: one worker may hold at most ONE open session per tenant, across
+any project/process/attempt — the partial unique index is the structural
+backstop and `ACTIVE_SESSION_EXISTS` the semantic error. Multiple workers
+MAY hold open sessions on one execution. Terminal execution transitions
+close every open session of that attempt inside the same transaction with
+`ended_by` = the transition actor — never a lingering open interval.
+
 ### cards
 
 ``` text
@@ -1264,7 +1307,8 @@ as mandated by AGENTS.md. Their UI/dispatch features remain in their planned pha
 012 dependencies
 013 assignments (implemented as processes.assignee_user_id +
     process_executions.assignee_user_id snapshot, STEP 21C)
-014 time_sessions + stop_reasons
+014 time_sessions (implemented as process_execution_time_sessions, STEP
+    21D; stop_reasons deferred)
 015 template foundations
 016 notifications
 017 files

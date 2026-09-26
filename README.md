@@ -37,6 +37,8 @@ Pause/resume ve realtime henüz uygulanmadı.
 - [Process domain foundation](docs/decisions/0015-process-domain-foundation.md)
 - [Process execution](docs/decisions/0016-process-execution.md)
 - [Progress engine](docs/decisions/0017-progress-engine.md)
+- [Assignment domain](docs/decisions/0018-assignment-domain.md)
+- [Time sessions](docs/decisions/0019-time-sessions.md)
 
 ## Mevcut yapı
 
@@ -284,6 +286,20 @@ org + workspace üyeliği yeniden kanıtlanarak korunur; üyelik iptali saklı
 atamayı temizlemez (stale, `eligible: false`). Üye seçici
 `GET .../workspaces/{id}/members` dizininden beslenir (sadece `id +
 display_name`, salt-okunur). `npm run test:db` `assignments` target'ını
+içerir.
+
+Time sessions (STEP 21D, ADR 0019) emek süresini yürütme duvar saatinden
+ayırır: `process_execution_time_sessions` satırları, bir işçinin bir
+denemede kesintisiz çalıştığı aralıklardır; duraklatma satırı kapatır,
+devam yeni satır açar (paused durumu yok). `POST .../executions/{id}/
+time-sessions` kendi oturumunu açar (worker = oturum açan kullanıcı;
+V1 self-service), `POST .../{session_id}/stop` yalnızca kendi açık
+oturumunu kapatır, `GET .../work-items/{id}/time-sessions` iş kalemindeki
+açık oturumları döner ("şu an kim çalışıyor"). Bir worker tenant başına
+en fazla bir açık oturum tutar (`ACTIVE_SESSION_EXISTS` 409); bir
+denemede birden çok worker eşzamanlı çalışabilir. Yürütmenin
+COMPLETE/CANCEL'i açık oturumları aynı transaction'da `ended_by =
+geçiş aktörü` ile kapatır. `npm run test:db` `time_sessions` target'ını
 içerir.
 
 ## Dil ve tema foundation

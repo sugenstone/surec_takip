@@ -1274,11 +1274,11 @@ async fn migration_012_rolls_back_and_reapplies(pool: PgPool) {
 
     platform_server::migrations::revert_last(&pool)
         .await
-        .unwrap_or_else(|error| panic!("013 down must apply: {error}"));
+        .unwrap_or_else(|error| panic!("014 down must apply: {error}"));
     MIGRATOR
         .undo(&pool, 20260926100000)
         .await
-        .unwrap_or_else(|error| panic!("012 down must apply: {error}"));
+        .unwrap_or_else(|error| panic!("013/012 downs must apply: {error}"));
     assert!(!index_012_exists(&pool).await);
     assert!(
         platform_server::migrations::verify(&pool).await.is_err(),

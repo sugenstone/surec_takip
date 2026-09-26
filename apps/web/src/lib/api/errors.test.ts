@@ -3,6 +3,7 @@ import { ApiRequestError } from './client';
 import {
   executionErrorMessageKey,
   loginErrorMessageKey,
+  sessionErrorMessageKey,
   organizationErrorMessageKey,
   processErrorMessageKey,
   projectErrorMessageKey,
@@ -212,5 +213,24 @@ describe('execution error mapping', () => {
       ).toBe(`executions.error.${key}`);
     }
     expect(executionErrorMessageKey(new Error('x'))).toBe('executions.error.unexpected');
+  });
+});
+
+describe('time session error mapping', () => {
+  it('maps status codes without inspecting server messages', () => {
+    for (const [code, key] of [
+      ['ACTIVE_SESSION_EXISTS', 'activeElsewhere'],
+      ['STATE_CONFLICT', 'conflict'],
+      ['VALIDATION_ERROR', 'validation'],
+      ['PERMISSION_DENIED', 'forbidden'],
+      ['RESOURCE_NOT_FOUND', 'notFound'],
+      ['NETWORK_ERROR', 'network'],
+      ['INTERNAL_ERROR', 'unexpected'],
+    ]) {
+      expect(sessionErrorMessageKey(new ApiRequestError(409, code, 'misleading message', ''))).toBe(
+        `sessions.error.${key}`,
+      );
+    }
+    expect(sessionErrorMessageKey(new Error('x'))).toBe('sessions.error.unexpected');
   });
 });

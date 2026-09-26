@@ -162,3 +162,26 @@ export function executionErrorMessageKey(error: unknown): TranslationKey {
   }
   return 'executions.error.unexpected';
 }
+
+// Time sessions (STEP 21D): ACTIVE_SESSION_EXISTS is the V1 rule — one
+// open session per worker per tenant — so it gets its own message instead
+// of the generic conflict.
+export function sessionErrorMessageKey(error: unknown): TranslationKey {
+  if (error instanceof ApiRequestError) {
+    switch (error.code) {
+      case 'ACTIVE_SESSION_EXISTS':
+        return 'sessions.error.activeElsewhere';
+      case 'STATE_CONFLICT':
+        return 'sessions.error.conflict';
+      case 'VALIDATION_ERROR':
+        return 'sessions.error.validation';
+      case 'PERMISSION_DENIED':
+        return 'sessions.error.forbidden';
+      case 'RESOURCE_NOT_FOUND':
+        return 'sessions.error.notFound';
+      case 'NETWORK_ERROR':
+        return 'sessions.error.network';
+    }
+  }
+  return 'sessions.error.unexpected';
+}

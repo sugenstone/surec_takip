@@ -531,6 +531,44 @@ any ancestor (process, work item, section subtree, project) that still
 contains an active execution fails `409`. See
 [ADR 0016](decisions/0016-process-execution.md).
 
+# 10.3.1 Time sessions (implemented — STEP 21D)
+
+Tracked labor intervals under a process execution (ADR 0019). Base for
+mutations:
+`.../work-items/{work_item_id}/processes/{process_id}/executions/{execution_id}/time-sessions`.
+
+| Method | Path | Input | Success |
+| --- | --- | --- | --- |
+| POST | `.../executions/{execution_id}/time-sessions` | empty `{}` | 201 `{data: TimeSessionPublic, server_time}` |
+| GET | `.../executions/{execution_id}/time-sessions` | none | 200 `{data: TimeSessionPublic[], server_time}` |
+| POST | `.../executions/{execution_id}/time-sessions/{time_session_id}/stop` | none | 200 `{data: TimeSessionPublic, server_time}` |
+| GET | `.../work-items/{work_item_id}/time-sessions` | none | 200 `{data: TimeSessionPublic[], server_time}` |
+
+`TimeSessionPublic` fields: `id`, `process_execution_id`, `worker`
+(`{id, display_name}` — minimal public identity, no email), `started_at`,
+`ended_at` (null while open), `started_by_user_id`,
+`ended_by_user_id`. All timestamps are DB-written; clients never send
+times, worker ids, or scope ids — the request body must be exactly `{}`
+(`400` otherwise). `server_time` is the DB clock for display anchoring.
+
+V1 is self-service: the authenticated user is the worker. START opens a
+session on an `active` execution; pause/resume is close + new row. STOP
+closes only the caller's OWN open session (`403` for another worker's
+session, `404` for an unknown id). COMPLETE/CANCEL of the execution close
+every open session in the same transaction with `ended_by` = the
+transition actor. The work-item GET returns only OPEN sessions across its
+processes ("who is working now"); per-execution GET returns the full
+interval history, oldest first.
+
+Rules and errors: starting while the caller already has an open session
+anywhere in the tenant is `409 ACTIVE_SESSION_EXISTS`; starting on a
+non-active execution or stopping an already-closed session is
+`409 STATE_CONFLICT`. Permissions `time_sessions:start` /
+`time_sessions:stop` (Owner + built-in Member, organization scope);
+reads follow ordinary work-item access. Error ordering mirrors
+executions: 401 → 404 → 403 → 400 → 409. See
+[ADR 0019](decisions/0019-time-sessions.md).
+
 # 10.4 Derived progress (implemented — STEP 21B)
 
 `ProjectPublic`, `SectionPublic` and `WorkItemPublic` — in every list and

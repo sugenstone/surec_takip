@@ -15,13 +15,20 @@
     listWorkspaceMembers,
     reorderProcesses,
     startExecution,
+    startTimeSession,
+    stopTimeSession,
     updateProcess,
     updateProcessAssignment,
     type ExecutionPublic,
     type ProcessPublic,
+    type TimeSessionPublic,
     type WorkspaceMemberPublic,
   } from '$lib/api/client';
-  import { executionErrorMessageKey, processErrorMessageKey } from '$lib/api/errors';
+  import {
+    executionErrorMessageKey,
+    processErrorMessageKey,
+    sessionErrorMessageKey,
+  } from '$lib/api/errors';
   import WorkItemForm from '$lib/work-items/WorkItemForm.svelte';
   import ProgressBlock from '$lib/ui/ProgressBlock.svelte';
   import ProcessForm from '$lib/processes/ProcessForm.svelte';
@@ -45,10 +52,28 @@
   let canExecStart = $derived(data.permissions.includes('process_executions:start'));
   let canExecComplete = $derived(data.permissions.includes('process_executions:complete'));
   let canExecCancel = $derived(data.permissions.includes('process_executions:cancel'));
+  // Time-session permissions are backend-enforced; these only gate controls.
+  let canTrackStart = $derived(data.permissions.includes('time_sessions:start'));
+  let canTrackStop = $derived(data.permissions.includes('time_sessions:stop'));
   // Attempts grouped per process definition, attempt_no ascending (API order).
   let attemptsByProcess = $derived.by(() => {
     const map: Record<string, ExecutionPublic[]> = {};
     for (const attempt of data.executions) (map[attempt.process_id] ??= []).push(attempt);
+    return map;
+  });
+  // Open labor sessions grouped per process via the active execution id.
+  // Sessions on terminal executions are never open (auto-close), so the
+  // work-item list maps cleanly onto rows.
+  let openSessionsByProcess = $derived.by(() => {
+    const map: Record<string, TimeSessionPublic[]> = {};
+    for (const session of data.openSessions) {
+      const processId = Object.keys(attemptsByProcess).find((id) =>
+        attemptsByProcess[id].some(
+          (attempt) => attempt.id === session.process_execution_id && attempt.status === 'active',
+        ),
+      );
+      if (processId) (map[processId] ??= []).push(session);
+    }
     return map;
   });
   let cancelling = $state<ExecutionPublic | null>(null);
@@ -120,6 +145,27 @@
     errorFor = null;
     cancelReason = '';
     cancelling = execution;
+  }
+
+  // Work sessions (STEP 21D): pause/resume is close+insert server-side.
+  // Both commands resolve the process's ACTIVE attempt — sessions can
+  // never target a terminal or missing execution from this UI.
+  async function startWork(process: ProcessPublic) {
+    const execution = attemptsByProcess[process.id]?.find((attempt) => attempt.status === 'active');
+    if (!execution) return;
+    await run(
+      () => startTimeSession({ ...data.processScope, processId: process.id }, execution.id),
+      sessionErrorMessageKey,
+    );
+  }
+  async function stopWork(process: ProcessPublic, sessionId: string) {
+    const execution = attemptsByProcess[process.id]?.find((attempt) => attempt.status === 'active');
+    if (!execution) return;
+    await run(
+      () =>
+        stopTimeSession({ ...data.processScope, processId: process.id }, execution.id, sessionId),
+      sessionErrorMessageKey,
+    );
   }
   async function confirmCancel() {
     const target = cancelling;
@@ -290,6 +336,10 @@
               canStart={canExecStart}
               canComplete={canExecComplete}
               canCancel={canExecCancel}
+              canTrack={canTrackStart}
+              canStopWork={canTrackStop}
+              currentUserId={data.user.id}
+              sessions={openSessionsByProcess[process.id] ?? []}
               attempts={attemptsByProcess[process.id] ?? []}
               serverTime={data.serverTime}
               disabled={!ready || pending}
@@ -309,6 +359,8 @@
                 const target = attemptsByProcess[process.id]?.find((attempt) => attempt.id === id);
                 if (target) askCancel(target);
               }}
+              onWorkStart={() => startWork(process)}
+              onWorkStop={(sessionId) => stopWork(process, sessionId)}
             />
           </li>
         {/each}

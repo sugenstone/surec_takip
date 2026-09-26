@@ -493,3 +493,41 @@ impl FromRequestParts<AppState> for ProcessExecutionContext {
         Ok(Self { parent, execution })
     }
 }
+
+#[derive(Deserialize)]
+struct TimeSessionRoute {
+    time_session_id: String,
+}
+
+/// Time session context (STEP 21D, ADR 0019): the FULL
+/// Org→…→Process→Execution chain first, then the session scoped to that
+/// exact execution. A session id alone never resolves anything;
+/// wrong-parent, foreign and unknown sessions are one uniform 404.
+/// Eligibility only; mutations re-prove everything in-transaction.
+pub struct TimeSessionContext {
+    pub parent: ProcessExecutionContext,
+    pub session: crate::time_sessions::TimeSessionPublic,
+}
+impl FromRequestParts<AppState> for TimeSessionContext {
+    type Rejection = ApiError;
+    async fn from_request_parts(
+        parts: &mut axum::http::request::Parts,
+        state: &AppState,
+    ) -> Result<Self, Self::Rejection> {
+        let parent = ProcessExecutionContext::from_request_parts(parts, state).await?;
+        let Path(route) = Path::<TimeSessionRoute>::from_request_parts(parts, state)
+            .await
+            .map_err(|_| not_found(parts))?;
+        let id = route
+            .time_session_id
+            .parse::<Uuid>()
+            .map_err(|_| not_found(parts))?;
+        let scope = crate::process_executions::ExecutionScope::of(&parent.parent);
+        let session =
+            crate::time_sessions::find_accessible(&state.pool, scope, parent.execution.id, id)
+                .await
+                .map_err(|_| ApiError::new(ErrorCode::InternalError, request_id_of(parts)))?
+                .ok_or_else(|| not_found(parts))?;
+        Ok(Self { parent, session })
+    }
+}

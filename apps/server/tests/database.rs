@@ -50,10 +50,37 @@ async fn migrated_database_is_ready_and_up_is_idempotent(
 async fn migration_can_revert_and_reapply_on_disposable_database(
     pool: PgPool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Newest first: 013 drops assignment columns/indexes/permission, then
-    // 012's index, then 011's table. revert_last requires a fully-applied
-    // history, so subsequent reverts go through undo() directly.
+    // Newest first: 014 drops the time sessions table/permissions and the
+    // execution scope key, then 013 drops assignment columns/indexes/
+    // permission, then 012's index, then 011's table. revert_last requires
+    // a fully-applied history, so subsequent reverts go through undo()
+    // directly.
     migrations::revert_last(&pool).await?;
+    let sessions_table: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM information_schema.tables \
+         WHERE table_name = 'process_execution_time_sessions')",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(!sessions_table, "revert must drop the 014 sessions table");
+    let session_permissions: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM permissions WHERE key LIKE 'time_sessions:%'")
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(
+        session_permissions, 0,
+        "revert must remove the 014 permission catalog rows"
+    );
+    let exec_scope_key: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM pg_constraint WHERE conname = 'process_executions_scope_id_key'",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        exec_scope_key, 0,
+        "revert must drop the 014 composite FK target on process_executions"
+    );
+    MIGRATOR.undo(&pool, 20260927100000).await?;
     let assignee_column: bool = sqlx::query_scalar(
         "SELECT EXISTS (SELECT 1 FROM information_schema.columns \
          WHERE table_name = 'processes' AND column_name = 'assignee_user_id')",
@@ -128,9 +155,9 @@ async fn changed_migration_checksum_is_rejected(
 #[sqlx::test(migrations = "../../migrations")]
 async fn revert_preserves_dependent_data(pool: PgPool) -> Result<(), Box<dyn std::error::Error>> {
     // A dependent object on an earlier table must block rollback instead of
-    // being dropped. 013 and 012 revert cleanly first; the dependent then
-    // blocks 011's undo — the failure must reach undo(), not the pre-revert
-    // history check.
+    // being dropped. 014, 013 and 012 revert cleanly first; the dependent
+    // then blocks 011's undo — the failure must reach undo(), not the
+    // pre-revert history check.
     sqlx::query(
         "CREATE TABLE migration_safety_probe (execution_id uuid REFERENCES process_executions (id))",
     )

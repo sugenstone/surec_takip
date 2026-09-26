@@ -20,6 +20,10 @@ pub enum ErrorCode {
     /// Domain state conflict: the resource exists and is visible, but its
     /// current state does not allow the requested transition (ADR 0016).
     StateConflict,
+    /// The authenticated worker already has an open time session elsewhere
+    /// in the tenant (ADR 0019): one open session per worker, never a
+    /// silent auto-stop.
+    ActiveSessionExists,
     InternalError,
 }
 
@@ -79,6 +83,10 @@ impl ApiError {
             ErrorCode::StateConflict => (
                 StatusCode::CONFLICT,
                 "The current state does not allow this operation.",
+            ),
+            ErrorCode::ActiveSessionExists => (
+                StatusCode::CONFLICT,
+                "You already have an active work session.",
             ),
             ErrorCode::InternalError => (
                 StatusCode::INTERNAL_SERVER_ERROR,

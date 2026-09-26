@@ -14,6 +14,7 @@ pub mod progress;
 pub mod projects;
 pub mod rbac;
 pub mod sections;
+pub mod time_sessions;
 pub mod users;
 pub mod work_items;
 pub mod workspaces;
@@ -167,6 +168,9 @@ pub fn router(state: AppState) -> Router {
         .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/executions", post(process_executions::start_execution_handler))
         .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/executions/{execution_id}/complete", post(process_executions::complete_execution_handler))
         .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/executions/{execution_id}/cancel", post(process_executions::cancel_execution_handler))
+        .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/executions/{execution_id}/time-sessions", post(time_sessions::start_session_handler).get(time_sessions::list_execution_sessions))
+        .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/processes/{process_id}/executions/{execution_id}/time-sessions/{time_session_id}/stop", post(time_sessions::stop_session_handler))
+        .route("/api/v1/organizations/{organization_id}/workspaces/{workspace_id}/projects/{project_id}/sections/{section_id}/work-items/{work_item_id}/time-sessions", get(time_sessions::list_work_item_open_sessions))
         .fallback(not_found)
         .method_not_allowed_fallback(method_not_allowed)
         .layer(middleware::from_fn(request_context))
@@ -272,6 +276,10 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         process_executions::list_work_item_executions,
         process_executions::complete_execution_handler,
         process_executions::cancel_execution_handler,
+        time_sessions::start_session_handler,
+        time_sessions::list_execution_sessions,
+        time_sessions::list_work_item_open_sessions,
+        time_sessions::stop_session_handler,
         sections::update_section_handler,
         permissions::effective_workspace_permissions,
         organizations::list_permissions,
@@ -329,6 +337,11 @@ async fn request_context(mut request: Request, next: Next) -> Response {
         process_executions::ExecutionPublic,
         process_executions::ExecutionMutationResponse,
         process_executions::ExecutionListResponse,
+        time_sessions::StartSessionRequest,
+        time_sessions::SessionWorkerPublic,
+        time_sessions::TimeSessionPublic,
+        time_sessions::SessionMutationResponse,
+        time_sessions::SessionListResponse,
         organizations::PermissionPublic,
         organizations::PermissionListResponse,
         organizations::RolePublic,

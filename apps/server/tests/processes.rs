@@ -1706,8 +1706,9 @@ async fn migration_backfill_preserves_assignments_and_member_has_no_grants(pool:
         .await
         .unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(before, after, "backfill never writes role assignments");
-    // ADR 0016: the 011 backfill grants built-in Members exactly the three
-    // execution keys at organization scope — and nothing else.
+    // ADR 0016 + 0019: backfills grant built-in Members exactly the three
+    // execution keys and the two time-session keys at organization scope —
+    // and nothing else.
     let member_keys: Vec<String> = sqlx::query_scalar(
         "SELECT p.key FROM role_permissions rp JOIN roles r ON r.id = rp.role_id \
          JOIN permissions p ON p.id = rp.permission_id \
@@ -1722,7 +1723,9 @@ async fn migration_backfill_preserves_assignments_and_member_has_no_grants(pool:
         vec![
             "process_executions:cancel",
             "process_executions:complete",
-            "process_executions:start"
+            "process_executions:start",
+            "time_sessions:start",
+            "time_sessions:stop"
         ]
     );
     // A fresh organization's Owner bootstrap includes the same keys.
@@ -1750,9 +1753,10 @@ async fn migration_backfill_preserves_assignments_and_member_has_no_grants(pool:
 async fn rollback_is_blocked_by_dependents_and_reapplies(pool: PgPool) {
     let f = Fixture::new(&pool).await;
     f.create("Kept").await;
-    // The newest migrations are 013 (assignment columns/grant) then 012
-    // (index-only), both without dependents: a dependent object on the
-    // executions table must block 011's down migration without CASCADE.
+    // The newest migrations are 014 (sessions table), 013 (assignment
+    // columns/grant) then 012 (index-only), all without dependents on the
+    // executions table itself: a dependent object on the executions table
+    // must block 011's down migration without CASCADE.
     exec(
         &pool,
         "CREATE TABLE process_dependency_probe (execution_id uuid REFERENCES process_executions (id))",
@@ -1760,7 +1764,9 @@ async fn rollback_is_blocked_by_dependents_and_reapplies(pool: PgPool) {
     .await;
     platform_server::migrations::revert_last(&pool)
         .await
-        .unwrap_or_else(|error| panic!("013 assignment down must apply: {error}"));
+        .unwrap_or_else(|error| panic!("014 sessions down must apply: {error}"));
+    // 013 and 012 have no dependents on the executions table; undo peels
+    // them, then the probe blocks 011.
     assert!(MIGRATOR.undo(&pool, 20260924100000).await.is_err());
     let kept: i64 = sqlx::query_scalar("SELECT count(*) FROM processes")
         .fetch_one(&pool)

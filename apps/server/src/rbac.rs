@@ -72,6 +72,8 @@ pub async fn bootstrap_builtin_roles(
         crate::process_executions::PROCESS_EXECUTIONS_COMPLETE.0,
         crate::process_executions::PROCESS_EXECUTIONS_CANCEL.0,
         crate::processes::PROCESSES_ASSIGN.0,
+        crate::time_sessions::TIME_SESSIONS_START.0,
+        crate::time_sessions::TIME_SESSIONS_STOP.0,
     ] {
         sqlx::query(
             "INSERT INTO role_permissions (role_id, permission_id, scope) \
@@ -83,13 +85,16 @@ pub async fn bootstrap_builtin_roles(
         .await
         .map_err(|_| ApiError::new(ErrorCode::InternalError, String::new()))?;
     }
-    // ADR 0016: built-in Members execute processes but administer nothing —
-    // exactly the three execution grants, organization scope, no writes to
-    // membership_roles. Workspace membership still gates eligibility.
+    // ADR 0016 + 0019: built-in Members execute processes and track their
+    // own work but administer nothing — execution and time-session grants
+    // only, organization scope, no writes to membership_roles. Workspace
+    // membership still gates eligibility.
     for key in [
         crate::process_executions::PROCESS_EXECUTIONS_START.0,
         crate::process_executions::PROCESS_EXECUTIONS_COMPLETE.0,
         crate::process_executions::PROCESS_EXECUTIONS_CANCEL.0,
+        crate::time_sessions::TIME_SESSIONS_START.0,
+        crate::time_sessions::TIME_SESSIONS_STOP.0,
     ] {
         sqlx::query(
             "INSERT INTO role_permissions (role_id, permission_id, scope) \

@@ -7,7 +7,7 @@
   import ActionMenu, { type MenuItem } from '@platform/ui/ActionMenu.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import { translate, type Locale } from '$lib/i18n';
-  import type { ExecutionPublic, ProcessPublic } from '$lib/api/client';
+  import type { ExecutionPublic, ProcessPublic, TimeSessionPublic } from '$lib/api/client';
   import { assigneeView } from './assignee';
   let {
     process,
@@ -21,6 +21,10 @@
     canStart,
     canComplete,
     canCancel,
+    canTrack,
+    canStopWork,
+    currentUserId,
+    sessions,
     attempts,
     serverTime,
     disabled,
@@ -31,6 +35,8 @@
     onStart,
     onComplete,
     onCancel,
+    onWorkStart,
+    onWorkStop,
   }: {
     process: ProcessPublic;
     index: number;
@@ -43,6 +49,10 @@
     canStart: boolean;
     canComplete: boolean;
     canCancel: boolean;
+    canTrack: boolean;
+    canStopWork: boolean;
+    currentUserId: string;
+    sessions: TimeSessionPublic[];
     attempts: ExecutionPublic[];
     serverTime: string;
     disabled: boolean;
@@ -53,6 +63,8 @@
     onStart: () => void;
     onComplete: (id: string) => void;
     onCancel: (id: string) => void;
+    onWorkStart: () => void;
+    onWorkStop: (sessionId: string) => void;
   } = $props();
   const vars = $derived({ name: process.name });
   const menuItems = $derived.by<MenuItem[]>(() => {
@@ -72,6 +84,11 @@
   const assignee = $derived(assigneeView(process, locale));
 
   const active = $derived(attempts.find((a) => a.status === 'active'));
+  // Open labor sessions on the active attempt (STEP 21D): worker chips are
+  // the "who is working" surface; the viewer's own open session drives the
+  // single start/pause control. Closed intervals live in the attempt
+  // history — labor duration is a reporting concern, not a row timer.
+  const myOpenSession = $derived(sessions.find((s) => s.worker.id === currentUserId));
   const latest = $derived(attempts[attempts.length - 1]);
   const terminal = $derived(latest && latest.status !== 'active' ? latest : undefined);
 
@@ -183,6 +200,26 @@
         data-testid="exec-timer">{formatDuration(elapsedMs)}</span
       >
       <span class="exec-buttons">
+        {#if canTrack}
+          {#if myOpenSession && canStopWork}
+            <button
+              type="button"
+              class="secondary exec-btn work-btn"
+              {disabled}
+              data-testid="work-pause-{process.id}"
+              onclick={() => onWorkStop(myOpenSession.id)}
+              >{translate(locale, 'sessions.pause')}</button
+            >
+          {:else if !myOpenSession}
+            <button
+              type="button"
+              class="secondary exec-btn work-btn"
+              {disabled}
+              data-testid="work-start-{process.id}"
+              onclick={onWorkStart}>{translate(locale, 'sessions.startWork')}</button
+            >
+          {/if}
+        {/if}
         {#if canComplete}
           <button
             type="button"
@@ -200,6 +237,17 @@
           >
         {/if}
       </span>
+      {#if sessions.length > 0}
+        <span class="work-sessions" data-testid="workers-{process.id}">
+          <span class="muted">{translate(locale, 'sessions.working')}:</span>
+          {#each sessions as session (session.id)}
+            <span class="worker-chip"
+              >{session.worker.display_name}{#if session.worker.id === currentUserId}
+                ({translate(locale, 'sessions.you')}){/if}</span
+            >
+          {/each}
+        </span>
+      {/if}
     {:else}
       {#if terminal}
         <span

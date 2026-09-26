@@ -1311,8 +1311,8 @@ async fn migration_backfill_preserves_assignments_and_member_has_no_grants(pool:
         .await
         .unwrap_or_else(|error| panic!("operation must succeed: {error}"));
     assert_eq!(before, after);
-    // ADR 0016: the 011 backfill grants built-in Members exactly the three
-    // execution keys at organization scope — and nothing else.
+    // ADR 0016 + 0019: the backfills grant built-in Members the execution
+    // and time-session keys at organization scope — and nothing else.
     let member_keys: Vec<String> = sqlx::query_scalar(
         "SELECT p.key FROM role_permissions rp JOIN roles r ON r.id = rp.role_id \
          JOIN permissions p ON p.id = rp.permission_id \
@@ -1327,7 +1327,9 @@ async fn migration_backfill_preserves_assignments_and_member_has_no_grants(pool:
         vec![
             "process_executions:cancel",
             "process_executions:complete",
-            "process_executions:start"
+            "process_executions:start",
+            "time_sessions:start",
+            "time_sessions:stop"
         ]
     );
 }
