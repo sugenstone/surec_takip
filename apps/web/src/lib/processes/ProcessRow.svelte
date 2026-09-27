@@ -4,7 +4,7 @@
   // progress. The live timer is display-only: it derives elapsed time from
   // the server-provided `started_at`/`serverTime` anchor and ticks locally
   // (no per-second writes, client clock skew is corrected by the anchor).
-  import ActionMenu, { type MenuItem } from '@platform/ui/ActionMenu.svelte';
+  import ActionMenu, { type MenuItem } from '$lib/ui/ActionMenu.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import { translate, type Locale } from '$lib/i18n';
   import type { ExecutionPublic, ProcessPublic, TimeSessionPublic } from '$lib/api/client';

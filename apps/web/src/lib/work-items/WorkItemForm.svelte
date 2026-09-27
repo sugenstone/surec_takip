@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ConfirmDialog from '@platform/ui/ConfirmDialog.svelte';
+  import ConfirmDialog from '$lib/ui/ConfirmDialog.svelte';
   import { onMount, untrack } from 'svelte';
   import { translate, type Locale } from '$lib/i18n';
   import {

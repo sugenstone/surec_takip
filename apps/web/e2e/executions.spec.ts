@@ -99,7 +99,7 @@ test('executions: owner starts, completes, retries and cancels with history', as
 
   // CANCEL with a reason → terminal cancelled state, reason in history.
   await kesimRow(page).getByRole('button', { name: 'İptal', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Süreci iptal et' });
+  const dialog = page.getByRole('alertdialog', { name: 'Süreci iptal et' });
   await expect(dialog).toBeVisible();
   await dialog.getByLabel(/İptal nedeni/).fill('Yanlış iş emri');
   await dialog.getByRole('button', { name: 'İptali onayla' }).click();

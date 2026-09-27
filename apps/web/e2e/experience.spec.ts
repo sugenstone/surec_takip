@@ -169,19 +169,19 @@ test('experience: failed create/edit preserves drafts and archive requires delib
   await expect(page.getByLabel('İşçilik adı')).toHaveValue('Unsaved edit');
   const archive = page.getByRole('button', { name: 'Arşivle', exact: true });
   await archive.click();
-  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByRole('alertdialog')).toBeVisible();
   await expect(
-    page.getByRole('dialog').getByRole('button', { name: 'Vazgeç', exact: true }),
+    page.getByRole('alertdialog').getByRole('button', { name: 'Vazgeç', exact: true }),
   ).toBeFocused();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expect(page.getByRole('alertdialog')).not.toBeVisible();
   await expect(archive).toBeFocused();
   const existing = await page.request.get(`/api/v1${f.itemsApi}/${f.item.id}`);
   expect(existing.status()).toBe(200);
   expect((await existing.json()).name).toBe(f.item.name);
   await archive.click();
   await page
-    .getByRole('dialog')
+    .getByRole('alertdialog')
     .getByRole('button', { name: 'Arşivlemeyi onayla', exact: true })
     .click();
   await expect(page).toHaveURL(f.sectionUrl);

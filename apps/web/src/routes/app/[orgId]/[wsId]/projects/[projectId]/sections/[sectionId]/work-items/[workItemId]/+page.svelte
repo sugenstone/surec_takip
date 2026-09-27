@@ -4,8 +4,8 @@
   import { resolve } from '$app/paths';
   import PageHeader from '@platform/ui/PageHeader.svelte';
   import StatusBadge from '@platform/ui/StatusBadge.svelte';
-  import ConfirmDialog from '@platform/ui/ConfirmDialog.svelte';
-  import FormDrawer from '@platform/ui/FormDrawer.svelte';
+  import ConfirmDialog from '$lib/ui/ConfirmDialog.svelte';
+  import FormDrawer from '$lib/ui/FormDrawer.svelte';
   import SectionBreadcrumbs from '$lib/ui/SectionBreadcrumbs.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import { translate, type TranslationKey } from '$lib/i18n';

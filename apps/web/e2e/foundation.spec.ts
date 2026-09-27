@@ -111,6 +111,41 @@ test('tailwind dark variant responds to data-theme and system preference', async
   expect(await probe()).toBe(light);
 });
 
+// STEP 21D.5C-D1: Tailwind v4 renders bare `border` utilities at
+// currentColor; the @layer base bridge in app.css must make them resolve
+// to the semantic --border token instead. Comparing against a var() probe
+// keeps the test free of hardcoded RGB values.
+test('bare border utilities resolve to the semantic border token', async ({ page, context }) => {
+  const probe = async () =>
+    page.evaluate(() => {
+      document.querySelectorAll('[data-border-probe]').forEach((node) => node.remove());
+      const make = (cls: string, style = '') => {
+        const el = document.createElement('div');
+        el.setAttribute('data-border-probe', '');
+        el.className = cls;
+        if (style) el.setAttribute('style', style);
+        document.body.appendChild(el);
+        return el;
+      };
+      const bare = make('border');
+      const tokenRef = make('', 'border: 1px solid var(--border)');
+      const currentRef = make('', 'color: var(--foreground); border: 1px solid');
+      const read = (el: HTMLElement) => getComputedStyle(el).borderTopColor;
+      const result = { bare: read(bare), token: read(tokenRef), current: read(currentRef) };
+      document.querySelectorAll('[data-border-probe]').forEach((node) => node.remove());
+      return result;
+    });
+
+  for (const theme of ['light', 'dark']) {
+    await context.addCookies([{ name: 'theme', value: theme, url: 'http://127.0.0.1:4173' }]);
+    await page.goto('/login');
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+    const { bare, token, current } = await probe();
+    expect(bare).toBe(token);
+    expect(bare).not.toBe(current);
+  }
+});
+
 test('parallel SSR locale requests do not contaminate each other', async ({ request }) => {
   const responses = await Promise.all(
     ['en', 'tr-TR', 'en', 'tr-TR'].map((locale) =>

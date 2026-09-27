@@ -143,7 +143,7 @@ test('processes: owner defines, edits, reorders and archives ordered processes',
   // Archive requires deliberate confirmation; cancel keeps the row.
   await page.getByRole('button', { name: 'Nakliye işlemleri' }).click();
   await page.getByRole('menuitem', { name: 'Süreci arşivle' }).click();
-  const confirm = page.getByRole('dialog', { name: 'Süreci arşivle' });
+  const confirm = page.getByRole('alertdialog', { name: 'Süreci arşivle' });
   await expect(confirm).toContainText('Nakliye');
   await confirm.getByRole('button', { name: 'Vazgeç', exact: true }).click();
   await expect(confirm).toBeHidden();

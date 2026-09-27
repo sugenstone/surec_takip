@@ -1,5 +1,9 @@
 @import 'tailwindcss';
 @import '@platform/ui/tokens.css';
+/* shadcn-svelte animation utilities (animate-in/fade-in/slide-in-*) used by
+   copied overlay primitives. tw-animate-css ships no reduced-motion handling
+   itself; the existing global prefers-reduced-motion rule below covers it. */
+@import 'tw-animate-css';
 
 @theme inline {
   --color-background: var(--background);
@@ -48,6 +52,18 @@
     &:where([data-theme='system'], [data-theme='system'] *) {
       @slot;
     }
+  }
+}
+
+/* Tailwind v4 preflight resets borders to `0 solid`, so bare `border`
+   utilities render at currentColor; copied shadcn primitives expect the
+   semantic border token. This layered default is still overridden by
+   utilities (border-destructive, border-input, ...) and component CSS. */
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
   }
 }
 
@@ -690,6 +706,7 @@ dialog h2 {
 }
 .app-content :is(input, textarea, select),
 .form-drawer :is(input, textarea, select),
+.confirm-dialog :is(input, textarea, select),
 dialog :is(input, textarea, select) {
   width: 100%;
   min-width: 0;
@@ -707,12 +724,14 @@ dialog :is(input, textarea, select) {
 }
 .app-content :is(input, textarea, select):focus-visible,
 .form-drawer :is(input, textarea, select):focus-visible,
+.confirm-dialog :is(input, textarea, select):focus-visible,
 dialog :is(input, textarea, select):focus-visible {
   border-color: var(--primary);
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
 }
 .form-drawer label:not(.sr-only),
+.confirm-dialog label:not(.sr-only),
 dialog label:not(.sr-only) {
   display: block;
   font-size: var(--text-small);
@@ -720,7 +739,8 @@ dialog label:not(.sr-only) {
   margin-block: var(--space-3) var(--space-2);
 }
 .app-content textarea,
-.form-drawer textarea {
+.form-drawer textarea,
+.confirm-dialog textarea {
   resize: vertical;
 }
 .app-content button,
@@ -883,58 +903,9 @@ dialog button.icon-btn:hover:not(:disabled) {
   color: var(--foreground);
 }
 
-/* Overflow action menu. */
-.action-menu {
-  position: relative;
-  display: inline-flex;
-}
-.action-menu .menu {
-  position: absolute;
-  inset-inline-end: 0;
-  inset-block-start: calc(100% + var(--space-1));
-  z-index: 30;
-  min-width: 13rem;
-  max-width: min(20rem, calc(100vw - var(--space-4)));
-  display: flex;
-  flex-direction: column;
-  padding: var(--space-1);
-  background: var(--surface-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-menu);
-}
-.menu-item,
-.app-content .menu-item,
-dialog .menu-item {
-  display: flex;
-  width: 100%;
-  min-height: 2.5rem;
-  padding: var(--space-2) var(--space-3);
-  align-items: center;
-  justify-content: flex-start;
-  text-align: start;
-  font: inherit;
-  font-size: var(--text-small);
-  font-weight: 500;
-  background: transparent;
-  color: var(--foreground);
-  border: 0;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  box-shadow: none;
-}
-.menu-item:hover:not(:disabled),
-.menu-item:focus-visible {
-  background: var(--surface-muted);
-  color: var(--foreground);
-}
-.menu-item.danger {
-  color: var(--danger);
-}
-.menu-item.danger:hover:not(:disabled),
-.menu-item.danger:focus-visible {
-  background: var(--danger-surface);
-}
+/* Overflow action menus use the shadcn DropdownMenu primitive layer
+   ($lib/ui/ActionMenu.svelte); the legacy .action-menu/.menu-item rules
+   were removed with the migration. */
 
 /* Card collections: dense scannable grid. */
 .collection {
@@ -1387,7 +1358,7 @@ dialog {
 dialog::backdrop {
   background: color-mix(in srgb, var(--foreground) 35%, transparent);
 }
-dialog[open]:not(.form-drawer) {
+dialog[open] {
   animation: surface-in 0.14s ease-out;
 }
 @keyframes surface-in {
@@ -1395,32 +1366,6 @@ dialog[open]:not(.form-drawer) {
     opacity: 0;
     transform: scale(0.97) translateY(4px);
   }
-}
-dialog.form-drawer {
-  inset-block: 0;
-  inset-inline-end: 0;
-  inset-inline-start: auto;
-  margin: 0;
-  width: min(30rem, 100vw);
-  max-width: 100vw;
-  height: 100dvh;
-  max-height: none;
-  padding: 0;
-  border: 0;
-  border-inline-start: 1px solid var(--border-subtle);
-  border-radius: 0;
-  background: var(--surface);
-  display: flex;
-  flex-direction: column;
-  translate: 100% 0;
-  transition: translate 0.18s ease-out;
-  box-shadow: var(--shadow-drawer);
-}
-dialog.form-drawer[open] {
-  translate: 0 0;
-}
-dialog.form-drawer:not([open]) {
-  display: none;
 }
 .drawer-head {
   display: flex;
@@ -1468,9 +1413,5 @@ dialog.form-drawer:not([open]) {
   .form-panel,
   .empty-state {
     padding: var(--space-4);
-  }
-  dialog.form-drawer {
-    width: 100vw;
-    border-inline-start: 0;
   }
 }

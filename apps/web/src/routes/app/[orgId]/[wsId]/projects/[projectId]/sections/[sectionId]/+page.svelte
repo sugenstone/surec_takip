@@ -14,10 +14,10 @@
   import { childCounts, directChildren } from '$lib/sections/tree';
   import PageHeader from '@platform/ui/PageHeader.svelte';
   import StatusBadge from '@platform/ui/StatusBadge.svelte';
-  import ConfirmDialog from '@platform/ui/ConfirmDialog.svelte';
+  import ConfirmDialog from '$lib/ui/ConfirmDialog.svelte';
   import EmptyState from '@platform/ui/EmptyState.svelte';
-  import FormDrawer from '@platform/ui/FormDrawer.svelte';
-  import ActionMenu, { type MenuItem } from '@platform/ui/ActionMenu.svelte';
+  import FormDrawer from '$lib/ui/FormDrawer.svelte';
+  import ActionMenu, { type MenuItem } from '$lib/ui/ActionMenu.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import SectionBreadcrumbs from '$lib/ui/SectionBreadcrumbs.svelte';
   import SectionCard from '$lib/sections/SectionCard.svelte';

@@ -185,8 +185,8 @@ test('sections: rename, reparent and archive persist after reload', async ({ pag
   await expect(page.getByRole('heading', { level: 1, name: 'A Blok' })).toBeVisible();
   await page.getByRole('button', { name: 'İşlemler', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Arşivle' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Arşivlemeyi onayla' }).click();
-  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Arşivlemeyi onayla' }).click();
+  await expect(page.getByRole('alertdialog')).not.toBeVisible();
   await expect(page.getByText('Arşivlendi').first()).toBeVisible();
 
   // Archived sections stay reachable: the page renders read-only so the
@@ -206,6 +206,10 @@ test('sections: rename, reparent and archive persist after reload', async ({ pag
   await page.getByRole('menuitem', { name: 'Yeniden etkinleştir' }).click();
   await page.getByRole('button', { name: 'İşlemler', exact: true }).click();
   await expect(page.getByRole('menuitem', { name: 'Arşivle' })).toBeVisible();
+  // The dropdown menu is a modal layer: an outside click dismisses it
+  // rather than reaching the element underneath, so close it first.
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).not.toBeVisible();
 
   // Root ordering on the project page is deterministic: A Blok first
   // (position 0), then Daire 1 (reparented, appended). Navigate back up via

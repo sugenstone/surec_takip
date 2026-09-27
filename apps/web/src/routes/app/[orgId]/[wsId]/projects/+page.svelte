@@ -1,7 +1,7 @@
 <script lang="ts">
   import PageHeader from '@platform/ui/PageHeader.svelte';
   import EmptyState from '@platform/ui/EmptyState.svelte';
-  import FormDrawer from '@platform/ui/FormDrawer.svelte';
+  import FormDrawer from '$lib/ui/FormDrawer.svelte';
   import StatusBadge from '@platform/ui/StatusBadge.svelte';
   import Icon from '$lib/ui/Icon.svelte';
   import ProgressBlock from '$lib/ui/ProgressBlock.svelte';

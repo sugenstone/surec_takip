@@ -71,7 +71,7 @@ test('projects: owner creates a project from the workspace modules and manages i
   await expect(page.getByText('Tamamlandı').first()).toBeVisible();
   await page.getByRole('button', { name: 'İşlemler', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Arşivle' }).click();
-  await page.getByRole('dialog').getByRole('button', { name: 'Arşivlemeyi onayla' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Arşivlemeyi onayla' }).click();
   await expect(page.getByText('Arşivlendi').first()).toBeVisible();
   await page.getByRole('button', { name: 'İşlemler', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Yeniden etkinleştir' }).click();
