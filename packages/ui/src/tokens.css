@@ -65,6 +65,33 @@
   --status-awaiting-approval: var(--warning);
   --status-completed: var(--success);
   --status-cancelled: var(--muted-foreground);
+
+  /* shadcn-svelte compatibility aliases (STEP 21D.5B): these map the
+     registry's semantic names onto our existing tokens so copied
+     primitives consume this design system instead of a demo palette.
+     Aliases resolve dynamically — theme overrides above stay
+     authoritative. --destructive is a fill color (destructive buttons)
+     and therefore does not alias --danger, which is a text color. */
+  --card: var(--surface);
+  --card-foreground: var(--foreground);
+  --popover: var(--surface-elevated);
+  --popover-foreground: var(--foreground);
+  --secondary-foreground: var(--foreground);
+  --accent: var(--surface-hover);
+  --accent-foreground: var(--foreground);
+  --destructive: #b91c1c;
+  --destructive-foreground: #ffffff;
+  --input: var(--border-strong);
+  --ring: var(--focus-ring);
+  --radius: var(--radius-md);
+  --sidebar: var(--sidebar-bg);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--surface-hover);
+  --sidebar-accent-foreground: var(--foreground);
+  --sidebar-border: var(--border-subtle);
+  --sidebar-ring: var(--focus-ring);
 }
 
 [data-theme='dark'] {

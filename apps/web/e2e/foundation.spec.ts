@@ -66,6 +66,51 @@ test('theme preference survives reload and system respects dark mode', async ({
   }
 });
 
+// shadcn-svelte foundation (STEP 21D.5B): Tailwind dark: utilities must
+// follow our SSR data-theme attribute, not a .dark class — explicit dark
+// always applies, system dark follows prefers-color-scheme, explicit light
+// never inherits OS dark. The probe uses a utility emitted by the Button
+// primitive's own source so the test observes the real compiled CSS.
+test('tailwind dark variant responds to data-theme and system preference', async ({
+  page,
+  context,
+}) => {
+  const probe = async () =>
+    page.evaluate(() => {
+      document.querySelectorAll('[data-dark-probe]').forEach((node) => node.remove());
+      const el = document.createElement('div');
+      el.setAttribute('data-dark-probe', '');
+      el.className = 'bg-background dark:bg-input/30';
+      el.style.height = '1px';
+      document.body.appendChild(el);
+      return getComputedStyle(el).backgroundColor;
+    });
+
+  // Explicit light + OS dark: variant must stay inactive.
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await context.addCookies([{ name: 'theme', value: 'light', url: 'http://127.0.0.1:4173' }]);
+  await page.goto('/login');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  const light = await probe();
+
+  // Explicit dark + OS light: variant must apply.
+  await page.emulateMedia({ colorScheme: 'light' });
+  await context.addCookies([{ name: 'theme', value: 'dark', url: 'http://127.0.0.1:4173' }]);
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  const dark = await probe();
+  expect(dark).not.toBe(light);
+
+  // System + OS dark: variant applies; system + OS light: it does not.
+  await context.addCookies([{ name: 'theme', value: 'system', url: 'http://127.0.0.1:4173' }]);
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'system');
+  expect(await probe()).toBe(dark);
+  await page.emulateMedia({ colorScheme: 'light' });
+  expect(await probe()).toBe(light);
+});
+
 test('parallel SSR locale requests do not contaminate each other', async ({ request }) => {
   const responses = await Promise.all(
     ['en', 'tr-TR', 'en', 'tr-TR'].map((locale) =>
