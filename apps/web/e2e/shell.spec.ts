@@ -79,3 +79,63 @@ test('shell: mobile — no overflow, logout reachable through the nav drawer', a
   await page.getByRole('button', { name: 'Menüyü aç/kapat' }).click();
   await expect(page.getByRole('button', { name: 'Çıkış yap' })).toBeVisible();
 });
+
+test('shell sidebar: desktop collapse persists across reload', async ({ page }) => {
+  await signIn(page);
+  await expect(page).toHaveURL(/\/app\/[a-f0-9-]+/, { timeout: 10_000 });
+  const sidebar = page.locator('[data-slot="sidebar"]');
+  await expect(sidebar).toHaveAttribute('data-state', 'expanded');
+
+  await page.getByRole('button', { name: 'Menüyü aç/kapat' }).click();
+  await expect(sidebar).toHaveAttribute('data-state', 'collapsed');
+  await expect(sidebar).toHaveAttribute('data-collapsible', 'icon');
+
+  await page.reload();
+  await expect(sidebar).toHaveAttribute('data-state', 'collapsed');
+  // Hydration marker: utility selects stay disabled until onMount.
+  await expect(page.getByLabel('Tema', { exact: true })).toBeEnabled();
+
+  await page.getByRole('button', { name: 'Menüyü aç/kapat' }).click();
+  await expect(sidebar).toHaveAttribute('data-state', 'expanded');
+  await page.reload();
+  await expect(sidebar).toHaveAttribute('data-state', 'expanded');
+});
+
+test('shell sidebar: collapsed navigation keeps labels via tooltip', async ({ page }) => {
+  await signIn(page);
+  await expect(page).toHaveURL(/\/app\/[a-f0-9-]+/, { timeout: 10_000 });
+  await page.getByRole('button', { name: 'Menüyü aç/kapat' }).click();
+  await expect(page.locator('[data-slot="sidebar"]')).toHaveAttribute('data-state', 'collapsed');
+
+  const navLink = page.getByRole('link', { name: 'Çalışma Alanları' });
+  await expect(navLink).toBeVisible();
+  await navLink.hover();
+  await expect(page.locator('[data-slot="tooltip-content"]')).toHaveText('Çalışma Alanları');
+});
+
+test('shell sidebar: active route carries aria-current', async ({ page }) => {
+  await signIn(page);
+  await expect(page).toHaveURL(/\/app\/[a-f0-9-]+$/, { timeout: 10_000 });
+  await expect(page.getByRole('link', { name: 'Çalışma Alanları' })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+});
+
+test('shell sidebar: mobile sheet opens, Escape closes, navigation closes', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 780 });
+  await signIn(page);
+  await expect(page).toHaveURL(/\/app\/[a-f0-9-]+$/, { timeout: 10_000 });
+
+  await page.getByRole('button', { name: 'Menüyü aç/kapat' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toBeHidden();
+
+  await page.getByRole('button', { name: 'Menüyü aç/kapat' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  // Brand link navigates /app → org home; afterNavigate closes the sheet.
+  await page.getByRole('link', { name: 'İş ve Operasyon Yönetimi' }).click();
+  await expect(page.getByRole('dialog')).toBeHidden();
+});

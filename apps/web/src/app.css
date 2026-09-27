@@ -67,6 +67,138 @@
   }
 }
 
+/* Hides scrollbars while preserving scroll (official shadcn-svelte utility,
+   used by the sidebar preset classes below). */
+@utility no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* shadcn-svelte "cn-*" style layer (STEP 21D.5D): component styles copied
+   from the official registry preset, scoped to primitives we actually use.
+   They live in @layer components so caller-supplied utilities still win. */
+@layer components {
+  .cn-input {
+    @apply dark:bg-input/30 border-input focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 disabled:bg-input/50 dark:disabled:bg-input/80 h-8 rounded-lg border bg-transparent px-2.5 py-1 text-base transition-colors file:h-6 file:text-sm file:font-medium focus-visible:ring-3 aria-invalid:ring-3 md:text-sm;
+  }
+
+  .cn-sidebar-gap {
+    @apply transition-[width] duration-200 ease-linear;
+  }
+
+  .cn-sidebar-inner {
+    @apply bg-sidebar group-data-[variant=floating]:ring-sidebar-border group-data-[variant=floating]:rounded-lg group-data-[variant=floating]:shadow-sm group-data-[variant=floating]:ring-1;
+  }
+
+  .cn-sidebar-rail {
+    @apply hover:after:bg-sidebar-border;
+  }
+
+  .cn-sidebar-inset {
+    @apply bg-background md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ml-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-2;
+  }
+
+  .cn-sidebar-input {
+    @apply bg-background h-8 w-full shadow-none;
+  }
+
+  .cn-sidebar-header {
+    @apply gap-2 p-2;
+  }
+
+  .cn-sidebar-content {
+    @apply no-scrollbar gap-0;
+  }
+
+  .cn-sidebar-footer {
+    @apply gap-2 p-2;
+  }
+
+  .cn-sidebar-separator {
+    @apply bg-sidebar-border mx-2;
+  }
+
+  .cn-sidebar-group {
+    @apply p-2;
+  }
+
+  .cn-sidebar-menu {
+    @apply gap-0;
+  }
+
+  .cn-sidebar-group-content {
+    @apply text-sm;
+  }
+
+  .cn-sidebar-group-label {
+    @apply text-sidebar-foreground/70 ring-sidebar-ring h-8 rounded-md px-2 text-xs font-medium transition-[margin,opacity] duration-200 ease-linear group-data-[collapsible=icon]:-mt-8 group-data-[collapsible=icon]:opacity-0 focus-visible:ring-2 [&>svg]:size-4;
+  }
+
+  .cn-sidebar-group-action {
+    @apply text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground absolute top-3.5 right-3 w-5 rounded-md p-0 focus-visible:ring-2 [&>svg]:size-4;
+  }
+
+  .cn-sidebar-menu-button {
+    @apply ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground data-open:hover:bg-sidebar-accent data-open:hover:text-sidebar-accent-foreground gap-2 rounded-md p-2 text-left text-sm transition-[width,height,padding] group-has-data-[sidebar=menu-action]/menu-item:pr-8 group-data-[collapsible=icon]:size-8! group-data-[collapsible=icon]:p-2! focus-visible:ring-2 data-active:font-medium;
+  }
+
+  .cn-sidebar-menu-button-aria {
+    @apply aria-expanded:hover:bg-sidebar-accent aria-expanded:hover:text-sidebar-accent-foreground;
+  }
+
+  .cn-sidebar-menu-button-variant-default {
+    @apply hover:bg-sidebar-accent hover:text-sidebar-accent-foreground;
+  }
+
+  .cn-sidebar-menu-button-variant-outline {
+    @apply bg-background hover:bg-sidebar-accent hover:text-sidebar-accent-foreground shadow-[0_0_0_1px_var(--sidebar-border)] hover:shadow-[0_0_0_1px_var(--sidebar-accent)];
+  }
+
+  .cn-sidebar-menu-button-size-default {
+    @apply h-8 text-sm;
+  }
+
+  .cn-sidebar-menu-button-size-sm {
+    @apply h-7 text-xs;
+  }
+
+  .cn-sidebar-menu-button-size-lg {
+    @apply h-12 text-sm group-data-[collapsible=icon]:p-0!;
+  }
+
+  .cn-sidebar-menu-action {
+    @apply text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground peer-hover/menu-button:text-sidebar-accent-foreground absolute top-1.5 right-1 aspect-square w-5 rounded-md p-0 peer-data-[size=default]/menu-button:top-1.5 peer-data-[size=lg]/menu-button:top-2.5 peer-data-[size=sm]/menu-button:top-1 focus-visible:ring-2 [&>svg]:size-4;
+  }
+
+  .cn-sidebar-menu-badge {
+    @apply text-sidebar-foreground peer-hover/menu-button:text-sidebar-accent-foreground peer-data-active/menu-button:text-sidebar-accent-foreground pointer-events-none absolute right-1 flex h-5 min-w-5 rounded-md px-1 text-xs font-medium peer-data-[size=default]/menu-button:top-1.5 peer-data-[size=lg]/menu-button:top-2.5 peer-data-[size=sm]/menu-button:top-1;
+  }
+
+  .cn-sidebar-menu-skeleton {
+    @apply h-8 gap-2 rounded-md px-2;
+  }
+
+  .cn-sidebar-menu-skeleton-icon {
+    @apply size-4 rounded-md;
+  }
+
+  .cn-sidebar-menu-skeleton-text {
+    @apply h-4;
+  }
+
+  .cn-sidebar-menu-sub {
+    @apply border-sidebar-border mx-3.5 translate-x-px gap-1 border-l px-2.5 py-0.5 group-data-[collapsible=icon]:hidden;
+  }
+
+  .cn-sidebar-menu-sub-button {
+    @apply text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent hover:text-sidebar-accent-foreground active:bg-sidebar-accent active:text-sidebar-accent-foreground [&>svg]:text-sidebar-accent-foreground data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground h-7 gap-2 rounded-md px-2 focus-visible:ring-2 data-[size=md]:text-sm data-[size=sm]:text-xs [&>svg]:size-4;
+  }
+}
+
 body {
   margin: 0;
   background: var(--background);
@@ -136,33 +268,17 @@ a {
 }
 
 /* ---------------------------------------------------------------- */
-/* Application shell: persistent sidebar + topbar + content column.  */
+/* Application shell (STEP 21D.5D): shadcn Sidebar primitives own    */
+/* layout/collapse/mobile behavior; the rules below cover only the   */
+/* product-specific pieces (brand, context fields, account, topbar). */
 /* ---------------------------------------------------------------- */
-.shell {
-  display: flex;
-  min-height: 100dvh;
-}
-.app-sidebar {
-  position: sticky;
-  top: 0;
-  height: 100dvh;
-  width: var(--sidebar-width);
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-  padding: var(--space-4) var(--space-3);
-  background: var(--sidebar-bg);
-  border-inline-end: 1px solid var(--border-subtle);
-  overflow-y: auto;
-}
 .brand {
   display: flex;
   align-items: center;
   gap: var(--space-2);
   min-height: var(--control-height);
-  padding-inline: var(--space-2);
-  color: var(--foreground);
+  padding-inline: var(--space-1);
+  color: var(--sidebar-foreground);
   text-decoration: none;
   font-weight: 650;
   letter-spacing: -0.01em;
@@ -172,39 +288,29 @@ a {
   width: 1.75rem;
   height: 1.75rem;
   border-radius: var(--radius-md);
-  background: linear-gradient(
-    135deg,
-    var(--primary),
-    color-mix(in srgb, var(--primary) 72%, #7c3aed)
-  );
-  color: #ffffff;
+  background: var(--sidebar-primary);
+  color: var(--sidebar-primary-foreground);
   display: flex;
   align-items: center;
   justify-content: center;
   flex: none;
-  box-shadow: var(--shadow-xs);
 }
 .brand-name {
   font-size: var(--text-small);
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.sidebar-context {
+[data-collapsible='icon'] .brand {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+/* Organization/workspace context controls. */
+.context-fields {
   display: flex;
   flex-direction: column;
-  gap: var(--space-3);
-  padding: var(--space-3);
-  background: var(--surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-xs);
-}
-.context-title {
-  font-size: var(--text-caption);
-  color: var(--muted-foreground);
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  gap: var(--space-2);
 }
 .sidebar-field {
   display: flex;
@@ -223,7 +329,7 @@ a {
   display: flex;
   min-width: 0;
 }
-.select-wrap .icon {
+.select-wrap svg {
   position: absolute;
   inset-inline-end: var(--space-2);
   inset-block-start: 50%;
@@ -231,7 +337,7 @@ a {
   color: var(--muted-foreground);
   pointer-events: none;
 }
-.sidebar-context select,
+.context-fields select,
 .topbar select {
   appearance: none;
   width: 100%;
@@ -250,68 +356,31 @@ a {
     border-color 0.15s ease,
     background-color 0.15s ease;
 }
-.sidebar-context select {
-  background: var(--surface-muted);
+.context-fields select {
+  background: var(--sidebar);
 }
-.sidebar-context select:hover:not(:disabled),
+.context-fields select:hover:not(:disabled),
 .topbar select:hover:not(:disabled) {
   border-color: var(--border);
 }
-.sidebar-context select:focus-visible,
+.context-fields select:focus-visible,
 .topbar select:focus-visible {
   border-color: var(--primary);
   outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
 }
 
-.side-nav ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-.nav-item {
-  position: relative;
+/* Account area at the bottom of the sidebar. */
+.sidebar-account {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
-  min-height: 2.5rem;
-  padding: var(--space-2) var(--space-3);
-  border-radius: var(--radius-md);
-  color: var(--muted-foreground);
-  text-decoration: none;
-  font-size: var(--text-small);
-  font-weight: 600;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
-}
-.nav-item:hover {
-  background: var(--surface-hover);
-  color: var(--foreground);
-}
-.nav-item[aria-current='page'] {
-  background: var(--selection-surface);
-  color: var(--primary);
-  box-shadow: inset 2px 0 0 var(--primary);
-}
-.sidebar-footer {
-  margin-block-start: auto;
-  display: flex;
-  flex-direction: column;
   gap: var(--space-2);
-}
-.user-block {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
   min-width: 0;
-  padding: var(--space-2) var(--space-3);
-  background: var(--surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-lg);
+  padding: 0 var(--space-2);
+}
+[data-collapsible='icon'] .sidebar-account {
+  justify-content: center;
+  padding-inline: 0;
 }
 .avatar {
   width: 2rem;
@@ -345,30 +414,8 @@ a {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.logout-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  width: 100%;
-  min-height: 2.5rem;
-  font: inherit;
-  font-size: var(--text-small);
-  font-weight: 600;
-  color: var(--muted-foreground);
-  background: transparent;
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    color 0.15s ease;
-}
-.logout-button:hover:not(:disabled) {
-  background: var(--surface-hover);
-  color: var(--foreground);
-}
 
+/* Main column: slim topbar above the content region. */
 .shell-body {
   flex: 1;
   min-width: 0;
@@ -384,8 +431,7 @@ a {
   gap: var(--space-2);
   min-height: var(--topbar-height);
   padding-inline: var(--page-gutter);
-  background: color-mix(in srgb, var(--surface) 82%, transparent);
-  backdrop-filter: blur(10px);
+  background: var(--background);
   border-block-end: 1px solid var(--border-subtle);
 }
 .topbar-utils {
@@ -398,67 +444,7 @@ a {
   width: auto;
 }
 
-.nav-toggle {
-  display: none;
-}
-.icon-btn.drawer-close {
-  display: none;
-}
-.drawer-backdrop {
-  display: none;
-}
-
 @media (max-width: 767px) {
-  .app-sidebar {
-    position: fixed;
-    inset-block: 0;
-    inset-inline-start: 0;
-    z-index: 40;
-    width: min(19rem, 85vw);
-    height: 100dvh;
-    transform: translateX(-105%);
-    visibility: hidden;
-    transition:
-      transform 0.2s ease,
-      visibility 0.2s;
-  }
-  .app-sidebar.open {
-    transform: none;
-    visibility: visible;
-    box-shadow: var(--shadow-drawer);
-  }
-  .drawer-backdrop {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 35;
-    border: 0;
-    padding: 0;
-    cursor: default;
-    background: color-mix(in srgb, var(--foreground) 35%, transparent);
-  }
-  .nav-toggle {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: var(--control-height);
-    height: var(--control-height);
-    border: 0;
-    background: transparent;
-    color: var(--foreground);
-    border-radius: var(--radius-md);
-    cursor: pointer;
-    padding: 0;
-  }
-  .nav-toggle:hover:not(:disabled) {
-    background: var(--surface-muted);
-  }
-  .app-sidebar .drawer-close {
-    display: inline-flex;
-    position: absolute;
-    inset-block-start: var(--space-3);
-    inset-inline-end: var(--space-3);
-  }
   .topbar {
     padding-inline: var(--space-3);
   }

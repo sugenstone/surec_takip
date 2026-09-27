@@ -14,6 +14,7 @@
   currentOrganizationId={data.organization.id}
   workspaces={data.workspaces}
   user={data.user}
+  sidebarOpen={data.sidebarOpen}
 >
   {@render children()}
 </AppShell>

@@ -11,6 +11,9 @@ const apiOrigin = process.env.API_ORIGIN ?? 'http://127.0.0.1:8080';
 export const handle: Handle = async ({ event, resolve }) => {
   event.locals.locale = resolveLocale(event.cookies.get('locale'));
   event.locals.theme = resolveTheme(event.cookies.get('theme'));
+  // Presentation-only sidebar collapse state; SSR'd into the layout so the
+  // shell renders expanded/collapsed without a hydration flip.
+  event.locals.sidebarOpen = event.cookies.get('sidebar_state') !== 'false';
   const session = await loadSession(event);
   event.locals.user = session?.user ?? null;
   // Only organizations the backend reports as visible memberships; the

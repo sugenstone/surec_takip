@@ -8,4 +8,5 @@ export const load: LayoutServerLoad = ({ locals }) => ({
   currentOrganizationId: locals.currentOrganizationId,
   workspaces: locals.workspaces,
   currentWorkspaceId: locals.currentWorkspaceId,
+  sidebarOpen: locals.sidebarOpen,
 });

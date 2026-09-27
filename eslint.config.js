@@ -22,4 +22,6 @@ export default ts.config(
   ...svelte.configs['flat/recommended'],
   { languageOptions: { globals: { ...globals.browser, ...globals.node } } },
   { files: ['**/*.svelte'], languageOptions: { parserOptions: { parser: ts.parser } } },
+  // Svelte 5 rune modules (*.svelte.ts) are plain TypeScript for linting.
+  { files: ['**/*.svelte.ts'], languageOptions: { parser: ts.parser } },
 );

@@ -4,7 +4,6 @@
   --page-gutter: clamp(1rem, 3vw, 2.5rem);
   --content-width: 76rem;
   --form-width: 32rem;
-  --sidebar-width: 15.5rem;
   --topbar-height: 3.5rem;
   --radius-pill: 999px;
   --status-archived: var(--muted-foreground);

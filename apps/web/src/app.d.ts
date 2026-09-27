@@ -16,6 +16,8 @@ declare global {
       // Presentation-only workspace context (cookie), resolved against the
       // permitted list above; never an authorization input.
       currentWorkspaceId: string | null;
+      // Presentation-only sidebar collapse preference (cookie).
+      sidebarOpen: boolean;
     }
     interface PageData {
       locale: Locale;
@@ -25,6 +27,7 @@ declare global {
       currentOrganizationId: string | null;
       workspaces: WorkspacePublic[];
       currentWorkspaceId: string | null;
+      sidebarOpen: boolean;
     }
   }
 }

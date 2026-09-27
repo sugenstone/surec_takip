@@ -71,7 +71,19 @@ for (const width of [360, 375, 768, 1280]) {
       await page.goto(f.projectUrl);
       await expect(page.getByRole('main')).toHaveCount(1);
       await expect(page.getByRole('link', { name: 'İçeriğe geç' })).toHaveCount(1);
+      if (width < 768) {
+        // Below 768px the sidebar lives inside the Sheet opened by the
+        // sidebar trigger. The theme select is the hydration marker (disabled
+        // until mount).
+        await expect(page.getByLabel('Tema', { exact: true })).toBeEnabled();
+        await page.getByRole('button', { name: 'Menüyü aç/kapat' }).click();
+        await expect(page.getByRole('dialog')).toBeVisible();
+      }
       await expect(page.getByLabel('Çalışma alanı', { exact: true })).toHaveValue(f.ws.id);
+      if (width < 768) {
+        await page.keyboard.press('Escape');
+        await expect(page.getByRole('dialog')).toBeHidden();
+      }
       await expect(page.getByLabel('Tema', { exact: true })).toHaveValue(theme);
       if (width >= 768) {
         const workspace = await page.getByLabel('Çalışma alanı', { exact: true }).boundingBox();
@@ -198,10 +210,13 @@ test('experience: application shell — desktop sidebar, mobile drawer, active n
   const nav = page.getByRole('navigation', { name: 'Ana gezinme' });
   await expect(nav).toBeVisible();
   await expect(nav.getByRole('link', { name: 'Projeler' })).toHaveAttribute('aria-current', 'page');
-  await expect(page.getByRole('button', { name: 'Menüyü aç/kapat' })).not.toBeVisible();
-  // Mobile: the sidebar becomes an off-canvas drawer behind the topbar toggle.
+  // The sidebar trigger is also the desktop collapse control.
+  await expect(page.getByRole('button', { name: 'Menüyü aç/kapat' })).toBeVisible();
+  // Mobile: the sidebar becomes a Sheet (off-canvas) behind the topbar toggle.
   await page.setViewportSize({ width: 375, height: 800 });
   await expect(nav).not.toBeVisible();
+  // Theme select enables on mount — a reliable hydration marker.
+  await expect(page.getByLabel('Tema', { exact: true })).toBeEnabled();
   const toggle = page.getByRole('button', { name: 'Menüyü aç/kapat' });
   await expect(toggle).toBeVisible();
   await toggle.click();
